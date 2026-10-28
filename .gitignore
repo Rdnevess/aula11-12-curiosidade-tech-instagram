@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+
+# Material da disciplina e pacote de entrega (não versionados)
+*.pdf
+*.zip
+
+# Documentos de processo (spec e plano), mantidos só localmente
+docs/
