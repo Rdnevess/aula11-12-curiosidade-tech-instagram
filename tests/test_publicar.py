@@ -1,0 +1,49 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from scripts.publicar import montar_multipart, nomes_campos, registrar
+
+# Trecho do HTML real do formulário publicado (n8n 2.42.5), com as quebras de linha dentro das tags.
+HTML = """<form><input
+    class='form-input form-required'
+    type='file'
+    id='field-0'
+    name='field-0'
+    accept='.jpg,.jpeg,.mp4,.mov'
+/>
+<textarea
+    class='form-input form-required'
+    id='field-1'
+    name='field-1'
+></textarea>
+<input id="useResponseData" style="display: none;" value=true /></form>"""
+
+
+class PublicarTest(unittest.TestCase):
+    def test_nomes_dos_campos(self):
+        self.assertEqual(nomes_campos(HTML), ("field-0", "field-1"))
+
+    def test_formulario_sem_campos(self):
+        with self.assertRaises(ValueError):
+            nomes_campos("<form></form>")
+
+    def test_multipart(self):
+        corpo = montar_multipart([("field-1", "Olá")], ("field-0", "v.mp4", "video/mp4", b"\x00\x01"), "LIM")
+        self.assertTrue(corpo.startswith(b"--LIM\r\nContent-Disposition: form-data; name=\"field-1\"\r\n\r\n"))
+        self.assertIn("Olá".encode("utf-8"), corpo)
+        self.assertIn(b'name="field-0"; filename="v.mp4"\r\nContent-Type: video/mp4\r\n\r\n\x00\x01\r\n', corpo)
+        self.assertTrue(corpo.endswith(b"--LIM--\r\n"))
+
+    def test_registrar_acrescenta(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "resultados.json"
+            registrar({"arquivo": "a.jpg"}, caminho)
+            registrar({"arquivo": "b.mp4"}, caminho)
+            self.assertEqual([r["arquivo"] for r in json.loads(caminho.read_text(encoding="utf-8"))],
+                             ["a.jpg", "b.mp4"])
+
+
+if __name__ == "__main__":
+    unittest.main()
