@@ -33,6 +33,8 @@ def _post(token, metodo, campos=None, arquivo=None, timeout=120):
             resposta = json.loads(r.read())
     except urllib.error.HTTPError as erro:
         raise ErroTelegram(f"Telegram {metodo} {erro.code}: {erro.read().decode('utf-8', 'replace')[:200]}") from None
+    except urllib.error.URLError as erro:
+        raise ErroTelegram(f"Telegram {metodo}: falha de rede ({type(erro.reason).__name__})") from None
     if not resposta.get("ok"):
         raise ErroTelegram(f"Telegram {metodo}: {resposta.get('description')}")
     return resposta.get("result")
@@ -51,11 +53,11 @@ def texto_pendente(roteiro, fato, motivos):
     fontes = "\n".join(f"• {f['dominio']}" for f in fato.get("fontes", [])[:5]) or "• nenhuma"
     falas = " ".join(t["fala"] for t in roteiro["trechos"])
 
-    # Build header and footer to preserve them
+    # Construir cabeçalho e rodapé para preservá-los
     header = f"⏸ Aguardando aprovação: {roteiro['titulo']} ({fato.get('data', '')})\n\n"
     footer = f"\n\nFontes:\n{fontes}\n\nRoteiro: {falas}"
 
-    # Calculate how much space is available for motivos
+    # Calcular quanto espaço está disponível para motivos
     motivos_str = '; '.join(motivos)
     motivos_prefix = "Motivos: "
 
@@ -64,13 +66,18 @@ def texto_pendente(roteiro, fato, motivos):
     if max_motivos_len < 0:
         max_motivos_len = 0
 
-    # Truncate motivos if needed to fit within limit
+    # Truncar motivos se necessário para caber dentro do limite
+    truncado = False
     if len(motivos_str) > max_motivos_len:
         motivos_str = motivos_str[:max_motivos_len]
+        truncado = True
+
+    if truncado:
+        motivos_str += "…"
 
     texto = header + motivos_prefix + motivos_str + footer
 
-    # Final safety check
+    # Verificação final de segurança
     if len(texto) > LIMITE_LEGENDA:
         texto = texto[:LIMITE_LEGENDA - 1] + "…"
 
@@ -86,7 +93,9 @@ def enviar_video(token, chat, caminho, legenda, dia_iso=None, chamar=chamar):
     if dia_iso:
         campos["reply_markup"] = json.dumps(teclado(dia_iso))
     caminho = Path(caminho)
-    conteudo = caminho.read_bytes() if caminho.exists() else b""
+    if not caminho.exists():
+        raise ErroTelegram(f"vídeo não encontrado: {caminho.name}")
+    conteudo = caminho.read_bytes()
     return chamar(token, "sendVideo", campos, ("video", caminho.name, "video/mp4", conteudo))
 
 
@@ -99,7 +108,7 @@ def ler_cliques(token, chat, offset, chamar=chamar):
         cq = u.get("callback_query")
         if not cq or str(cq.get("message", {}).get("chat", {}).get("id")) != str(chat):
             continue
-        achado = CLIQUE.match(cq.get("data", ""))
+        achado = CLIQUE.match(cq.get("data") or "")
         if achado:
             cliques.append({"acao": achado.group(1), "dia": achado.group(2), "id": cq["id"]})
     return cliques, novo

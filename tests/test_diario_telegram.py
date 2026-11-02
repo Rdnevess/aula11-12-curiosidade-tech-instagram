@@ -1,6 +1,8 @@
 import json
 import unittest
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
 from scripts.diario import telegram
 
@@ -53,6 +55,37 @@ class TelegramTest(unittest.TestCase):
     def test_chats(self):
         g = Gravador([{"update_id": 1, "message": {"chat": {"id": 42, "first_name": "Rodrigo"}, "text": "/start"}}])
         self.assertEqual(telegram.chats("T", chamar=g), [("42", "Rodrigo")])
+
+    def test_post_urlerror_sem_url_no_erro(self):
+        """_post deve sanitizar URLError sem expor URL/token"""
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = urllib.error.URLError(ConnectionError("conexão recusada"))
+
+            with self.assertRaises(telegram.ErroTelegram) as ctx:
+                telegram._post("meu_token_secreto", "sendMessage", {"chat_id": "42"})
+
+            # Verificar que o token não está na mensagem
+            self.assertNotIn("meu_token_secreto", str(ctx.exception))
+            self.assertIn("falha de rede", str(ctx.exception))
+
+    def test_enviar_video_arquivo_nao_existe(self):
+        """enviar_video deve lançar ErroTelegram se arquivo não existe"""
+        with self.assertRaises(telegram.ErroTelegram) as ctx:
+            telegram.enviar_video("T", "42", Path("posts/inexistente.mp4"), "legenda")
+
+        self.assertIn("vídeo não encontrado", str(ctx.exception))
+        self.assertIn("inexistente.mp4", str(ctx.exception))
+
+    def test_ler_cliques_tolera_data_none(self):
+        """ler_cliques deve tolerar callback_query com data=None"""
+        updates = [
+            {"update_id": 10, "callback_query": {"id": "a", "data": None, "message": {"chat": {"id": 42}}}},
+        ]
+        g = Gravador(updates)
+        cliques, offset = telegram.ler_cliques("T", "42", 5, chamar=g)
+        # Nenhum clique válido (None não combina com regex)
+        self.assertEqual(cliques, [])
+        self.assertEqual(offset, 11)
 
 
 if __name__ == "__main__":
