@@ -153,6 +153,45 @@ const SCENES = {
       return [stampAt, S[1] + 0.35, S[2] + 0.1, S[2] + 0.35, offAt]
     },
   },
+  megadrive: {
+    build: () => `
+      <div class="abs" id="mdCart" style="left:330px;top:930px;width:420px;height:480px">
+        <div style="position:absolute;inset:0;background:#1A1F33;border:3px solid #3A4466;border-radius:26px 26px 12px 12px"></div>
+        <div style="position:absolute;left:40px;right:40px;top:24px;height:40px;background:repeating-linear-gradient(90deg,#3A4466 0 10px,transparent 10px 22px);border-radius:6px"></div>
+        <div style="position:absolute;left:36px;right:36px;top:96px;height:300px;border-radius:14px;background:linear-gradient(160deg,#39FF88,#1FB5A8 55%,#13205A);display:grid;place-items:center">
+          <span style="font:800 64px var(--mono);color:#0B1020;letter-spacing:2px">16-BIT</span></div>
+      </div>
+      <div class="abs date" id="mdDate" style="top:880px">29/10/1988</div>
+      ${panel('mdJp', 'left:240px;top:1060px;width:600px;height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px', `
+        <div style="width:330px;height:220px;background:#fff;border-radius:10px;display:grid;place-items:center"><div style="width:132px;height:132px;border-radius:50%;background:#BC002D"></div></div>
+        <div style="font:800 46px var(--mono);letter-spacing:6px">JAPÃO</div>`)}
+      <div class="abs" id="mdLine" style="left:150px;width:780px;top:900px;height:160px">
+        <div style="position:absolute;left:60px;right:60px;top:56px;height:8px;background:var(--line);border-radius:4px"></div>
+        <div id="mdFill" style="position:absolute;left:60px;top:56px;height:8px;width:0;background:var(--brand);border-radius:4px"></div>
+        <div style="position:absolute;left:0;top:96px;font:800 52px var(--mono)">1988</div>
+        <div style="position:absolute;right:0;top:96px;font:800 52px var(--mono);color:var(--brand)">1990</div>
+      </div>
+      ${panel('mdBr', 'left:240px;top:1110px;width:600px;height:390px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px', `
+        <div style="position:relative;width:330px;height:230px;background:#009C3B;border-radius:10px">
+          <div style="position:absolute;inset:22px 26px;background:#FFDF00;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></div>
+          <div style="position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px;border-radius:50%;background:#002776"></div></div>
+        <div style="font:800 40px var(--mono);letter-spacing:4px">TEC TOY · BRASIL</div>`)}
+      <div class="abs num" id="mdNum" style="top:1000px"></div>
+      <div class="abs sub" id="mdSub" style="top:1170px">unidades no Brasil</div>`,
+    frame(t, S, D) {
+      show($('#mdCart'), t, 0.15, S[1] - 0.05, { dy: -320, dur: 0.45 })
+      glitch($('#mdCart'), t, 0.55)
+      show($('#mdDate'), t, S[1], S[2] - 0.05)
+      show($('#mdJp'), t, S[1] + 0.4, S[2] - 0.05)
+      show($('#mdLine'), t, S[2] + 0.25, S[3] - 0.05)
+      $('#mdFill').style.width = `${easeOut(clamp((t - S[2] - 0.2) / 0.9)) * 660}px`
+      show($('#mdBr'), t, S[2] + D[2] * 0.5, S[3] - 0.05)
+      show($('#mdNum'), t, S[3] + 0.25, S[4] - 0.1)
+      $('#mdNum').textContent = count(t, S[3] + 0.1, 1.1, 3000000).toLocaleString('pt-BR')
+      show($('#mdSub'), t, S[3] + 0.5, S[4] - 0.1)
+      return [0.6, S[1] + 0.4, S[2] + D[2] * 0.5, S[3] + 1.2]
+    },
+  },
   // ── fim das cenas
 }
 
