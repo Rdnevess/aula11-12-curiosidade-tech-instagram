@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<!-- Série "Hoje na história da tech" (@curiosidadetechhoje). Adaptado de reels-video/templates/stage.html.
+     render(t) desenha o instante t (s): NADA de animação/transição CSS, tudo é função do tempo.
+     Caminhos relativos valem a partir da pasta do reel.json (o render injeta <base href>). -->
+<style>
+@font-face{font-family:"Inter";src:url("../fontes/inter-latin-900-normal.woff2") format("woff2");font-weight:900}
+@font-face{font-family:"JBMono";src:url("../fontes/jetbrains-mono-latin-500-normal.woff2") format("woff2");font-weight:500}
+@font-face{font-family:"JBMono";src:url("../fontes/jetbrains-mono-latin-800-normal.woff2") format("woff2");font-weight:800}
+:root{--font:"Inter",Arial,sans-serif;--mono:"JBMono",Consolas,monospace;
+  --bg:#0B1020;--panel:#131A33;--line:#2A3558;--ink:#F4F7FF;--muted:#8A95B8;--brand:#39FF88;--alert:#FFB547}
+*{box-sizing:border-box}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--bg);font-family:var(--font);color:var(--ink)}
+.abs{position:absolute}
+#grid{position:absolute;inset:0}
+#scan{position:absolute;inset:0;z-index:20;background:repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 2px,transparent 2px 6px)}
+#selo{left:72px;top:232px;font:800 26px var(--mono);letter-spacing:4px;color:var(--brand);border:2px solid var(--brand);border-radius:12px;padding:10px 18px;background:rgba(57,255,136,.06)}
+/* legenda grande: a maioria assiste no mudo */
+#cap{left:72px;right:160px;top:330px;height:390px;display:flex;align-items:flex-start;z-index:10}
+#cap p{margin:0;font-weight:900;font-size:76px;line-height:1.06;letter-spacing:-2px;text-shadow:0 6px 0 #05070F,0 0 28px rgba(0,0,0,.7)}
+#cap .w{display:inline-block;margin-right:.24em}
+#cap .hi{color:var(--brand)}
+/* peças da série */
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:28px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.date{left:0;right:0;text-align:center;font:800 120px var(--mono);letter-spacing:-4px;color:var(--brand)}
+.num{left:0;right:0;text-align:center;font:800 130px var(--mono);letter-spacing:-5px;color:var(--brand)}
+.sub{left:0;right:0;text-align:center;font:500 40px var(--mono);color:var(--muted);letter-spacing:1px}
+.stamp{position:absolute;left:50%;top:50%;font:800 84px var(--mono);color:var(--alert);border:8px solid var(--alert);border-radius:16px;padding:6px 26px;background:rgba(11,16,32,.85);white-space:nowrap}
+.bar{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:2px solid var(--line);font:500 26px var(--mono);color:var(--muted)}
+.bar i{width:18px;height:18px;border-radius:50%;background:var(--line);display:inline-block}
+.alert{color:var(--alert)}
+/* cartão final */
+#end{position:absolute;inset:0;background:var(--bg);z-index:15}
+#endAt{position:absolute;left:0;right:0;top:960px;text-align:center;font:800 66px var(--mono);color:var(--brand);letter-spacing:-1px}
+#endSub{position:absolute;left:120px;right:120px;top:1090px;text-align:center;font-weight:900;font-size:62px;line-height:1.1;letter-spacing:-1.5px}
+#endSelo{position:absolute;left:0;right:0;top:860px;text-align:center;font:800 26px var(--mono);letter-spacing:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<svg id="grid" width="1080" height="1920"></svg>
+<div class="abs" id="selo"></div>
+<div id="cap" class="abs"><p></p></div>
+<div id="scene"></div>
+<div id="end" style="opacity:0">
+  <div id="endSelo">HOJE NA HISTÓRIA DA TECH</div>
+  <div id="endAt"></div>
+  <div id="endSub">Siga para uma curiosidade de tecnologia por dia</div>
+</div>
+<div id="scan"></div>
+<script>
+// ── tempo ──────────────────────────────────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
+const easeOut = (x) => 1 - Math.pow(1 - x, 3)
+const easeBack = (x) => { const c = 1.6; x = x - 1; return 1 + (c + 1) * x * x * x + c * x * x }
+const lerp = (a, b, p) => a + (b - a) * p
+const $ = (s) => document.querySelector(s)
+// Entra em tIn (sobe e cresce com leve "back"), sai em tOut (desvanece). o.base = transform fixo.
+function show(el, t, tIn, tOut = Infinity, o = {}) {
+  if (!el) return
+  const d = o.dur ?? 0.38, dy = o.dy ?? 46
+  const pin = clamp((t - tIn) / d), pout = clamp((t - tOut) / 0.3)
+  const p = (o.back === false ? easeOut : easeBack)(pin)
+  el.style.opacity = String(clamp(pin * 1.6) * (1 - pout))
+  el.style.transform = `${o.base ?? ''} translate(${(o.dx ?? 0) * (1 - p)}px, ${dy * (1 - p)}px) scale(${lerp(o.s ?? 0.94, 1, p)})`
+  el.style.visibility = el.style.opacity === '0' ? 'hidden' : 'visible'
+}
+// Digita o texto entre t0 e t1, com cursor ▌ piscando.
+function typeText(el, t, t0, t1, text) {
+  const n = Math.round(clamp((t - t0) / (t1 - t0)) * text.length)
+  el.textContent = text.slice(0, n) + (t >= t0 && t < t1 + 0.6 && Math.floor(t * 2.4) % 2 === 0 ? '▌' : '')
+}
+// Contador que sobe de 0 a v entre t0 e t0+d.
+const count = (t, t0, d, v) => Math.round(easeOut(clamp((t - t0) / d)) * v)
+// Glitch de 3 quadros a partir de t0: desloca e separa as cores (propriedade translate, não briga com show()).
+function glitch(el, t, t0) {
+  if (!el) return
+  const f = Math.floor((t - t0) * 30)
+  const on = f >= 0 && f < 3
+  el.style.translate = on ? `${((f * 37 + 11) % 25) - 12}px ${((f * 17) % 9) - 4}px` : '0 0'
+  el.style.filter = on ? 'drop-shadow(6px 0 0 rgba(255,60,90,.8)) drop-shadow(-6px 0 0 rgba(60,200,255,.8))' : 'none'
+}
+const blink = (t, hz = 3) => Math.floor(t * hz * 2) % 2 === 0
+const panel = (id, style, inner) => `<div class="abs panel" id="${id}" style="${style}">${inner}</div>`
+
+// ── fundo: grade sutil ─────────────────────────────────────────────────────
+function grid() {
+  let h = ''
+  for (let x = 0; x <= 1080; x += 60) h += `<line x1="${x}" y1="0" x2="${x}" y2="1920" stroke="#39FF88" stroke-opacity="0.045"/>`
+  for (let y = 0; y <= 1920; y += 60) h += `<line x1="0" y1="${y}" x2="1080" y2="${y}" stroke="#39FF88" stroke-opacity="0.045"/>`
+  $('#grid').innerHTML = h
+}
+
+// ── legenda palavra a palavra (segue o tempo do trecho) ────────────────────
+let HI = /^$/, capKey = ''
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+function caption(t, S, D, lines, hideFrom = Infinity) {
+  let i = -1
+  for (let k = 0; k < lines.length; k++) if (t >= S[k] - 0.05) i = k
+  const p = $('#cap p')
+  if (i < 0 || t >= hideFrom) { p.innerHTML = ''; capKey = ''; return }
+  const words = lines[i].split(' ')
+  if (capKey !== String(i)) {
+    p.innerHTML = words.map((w) => `<span class="w${HI.test(w.replace(/[…?!.,:;]/g, '')) ? ' hi' : ''}">${w}</span>`).join('')
+    capKey = String(i)
+  }
+  p.querySelectorAll('.w').forEach((s, k) => {
+    const q = clamp((t - (S[i] + (k / words.length) * D[i] * 0.85)) / 0.18)
+    s.style.opacity = String(q)
+    s.style.transform = `translateY(${(1 - easeOut(q)) * 22}px)`
+  })
+}
+
+// ── silhueta genérica (nunca rosto real) ───────────────────────────────────
+const silhueta = (cor) => `<svg width="220" height="240" viewBox="0 0 220 240"><circle cx="110" cy="80" r="52" fill="${cor}"/><path d="M20 240c0-60 40-96 90-96s90 36 90 96z" fill="${cor}"/></svg>`
+
+// ── cenas ──────────────────────────────────────────────────────────────────
+// build(d) devolve o HTML; frame(t, S, D, d) posiciona tudo e devolve os tempos dos "pops".
+// S[i]/D[i] = início/duração do trecho i da locução (5 trechos: gancho, data, fato, número, CTA).
+const SCENES = {
+  facemash: {
+    build: () => `
+      <div class="abs" id="fmHook" style="left:290px;top:930px;width:500px;height:500px">
+        <div class="panel" style="position:absolute;inset:60px;display:grid;place-items:center">${silhueta('#2A3558')}</div>
+        <div class="stamp" id="fmStamp">PROIBIDO</div>
+      </div>
+      <div class="abs date" id="fmDate" style="top:880px">28/10/2003</div>
+      <div class="abs num" id="fmNum" style="top:880px"></div>
+      ${panel('fmWin', 'left:150px;top:1050px;width:780px;height:450px;overflow:hidden', `
+        <div class="bar"><i></i><i></i><i></i><span style="margin-left:14px">facemash.com</span></div>
+        <div style="display:flex;justify-content:space-around;padding:30px 30px 0">
+          <div id="fmA">${silhueta('#5B6890')}</div><div id="fmB">${silhueta('#5B6890')}</div>
+        </div>
+        <div class="abs" id="fmTag" style="left:0;right:0;top:368px;text-align:center;font:800 40px var(--mono)" ><span class="alert">SEM PERMISSÃO</span></div>
+        <div class="abs" id="fmOff" style="inset:0;display:grid;place-items:center;background:rgba(11,16,32,.92);font:800 64px var(--mono)"><span class="alert">SITE FORA DO AR</span></div>`)}`,
+    frame(t, S, D) {
+      const stampAt = S[0] + D[0] * 0.6, offAt = S[3] + D[3] * 0.55
+      show($('#fmHook'), t, 0, S[1] - 0.05, { dy: 80 })
+      show($('#fmStamp'), t, stampAt, Infinity, { dy: 0, s: 1.8, dur: 0.22, base: 'translate(-50%,-50%) rotate(-12deg)' })
+      glitch($('#fmHook'), t, stampAt)
+      show($('#fmDate'), t, S[1], S[3] - 0.05)
+      show($('#fmWin'), t, S[1] + 0.35, S[4] - 0.1)
+      show($('#fmA'), t, S[2] + 0.1)
+      show($('#fmB'), t, S[2] + 0.35)
+      show($('#fmTag'), t, S[2] + D[2] * 0.45)
+      $('#fmA').style.outline = $('#fmB').style.outline = 'none'
+      if (t >= S[2] + 0.7 && t < S[3]) (blink(t, 2) ? $('#fmA') : $('#fmB')).style.outline = '6px solid var(--brand)'
+      show($('#fmNum'), t, S[3], S[4] - 0.1)
+      $('#fmNum').textContent = `${count(t, S[3], 1.0, 450)} visitas`
+      show($('#fmOff'), t, offAt, Infinity, { dy: 0, s: 1.05 })
+      glitch($('#fmWin'), t, offAt)
+      return [stampAt, S[1] + 0.35, S[2] + 0.1, S[2] + 0.35, offAt]
+    },
+  },
+  // ── fim das cenas
+}
+
+// ── montagem ───────────────────────────────────────────────────────────────
+// data: { scene, selo ("28 OUT"), highlight:[palavras], endHold (s de cartão final, padrão 3,6) }
+window.setup = function ({ S, D, lines, data, voiceEnd }) {
+  const sc = SCENES[data.scene]
+  if (!sc) throw new Error(`cena desconhecida: ${data.scene}`)
+  grid()
+  $('#selo').textContent = `HOJE NA HISTÓRIA DA TECH · ${data.selo || ''}`
+  HI = new RegExp(`^(${(data.highlight || []).map(esc).join('|') || '$^'})$`, 'i')
+  $('#scene').innerHTML = sc.build(data)
+  const last = S.length - 1
+  const outroAt = S[last] - 0.1 // o cartão final entra junto com o CTA falado
+  window.TL = { S, D, lines, data, sc, outroAt, total: Math.max(voiceEnd + 0.6, outroAt + (data.endHold ?? 3.6)) }
+  return { total: window.TL.total, outroAt }
+}
+window.render = function (t) {
+  const { S, D, lines, data, sc, outroAt } = window.TL
+  const events = sc.frame(t, S, D, data) || []
+  caption(t, S, D, lines, outroAt)
+  show($('#selo'), t, 0, outroAt, { dy: -20, back: false })
+  const pe = clamp((t - outroAt) / 0.35), end = $('#end')
+  end.style.opacity = String(pe)
+  end.style.visibility = pe > 0 ? 'visible' : 'hidden'
+  show($('#endSelo'), t, outroAt + 0.2, Infinity, { dy: 30 })
+  typeText($('#endAt'), t, outroAt + 0.35, outroAt + 1.5, '@curiosidadetechhoje')
+  show($('#endSub'), t, outroAt + 1.6, Infinity, { dy: 50 })
+  return [...events, outroAt + 1.6]
+}
+</script>
+</body>
+</html>
