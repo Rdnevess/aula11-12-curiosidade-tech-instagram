@@ -1,0 +1,36 @@
+{
+  "lines": [
+    "Um professor achou um erro… dentro do processador da Intel.",
+    "Em 1994, Thomas Nicely pegou o Pentium errando uma conta.",
+    "O erro aparecia na quarta casa decimal.",
+    "A Intel trocou os chips: prejuízo de 475 milhões de dólares.",
+    "Siga @curiosidadetechhoje!"
+  ],
+  "pronounce": { "@curiosidadetechhoje": "arroba curiosidade téc hoje", "Tec Toy": "Téc Tói" },
+  "voice": {
+    "mode": "take",
+    "voices": ["Puck"],
+    "outDir": "audio",
+    "language": "pt",
+    "note": "Leia em português do Brasil, voz de criador de conteúdo no Instagram: animada, próxima, confiante, ritmo rápido e claro, sem exagero. Fale como quem conta uma curiosidade surpreendente. 'arroba curiosidade téc hoje' são palavras em português; 'téc' rima com 'chéque'. VERY fast — must fit in about 15 seconds, never slow down. Fale exatamente o texto: ",
+    "anchors": [["em", "1994|mil"], ["o", "erro", "aparecia"], ["a", "intel", "trocou"], ["siga"]],
+    "prefer": "curiosidade.{0,3}te[ck]",
+    "maxSeconds": 16.5,
+    "speedupMax": 0.1
+  },
+  "render": {
+    "name": "pentium",
+    "stage": "../curiosidade.html",
+    "out": "out/{name}.mp4",
+    "build": "build",
+    "fps": 30, "width": 1080, "height": 1920,
+    "lead": 0.25,
+    "cover": "S1+1.0",
+    "pops": true,
+    "data": {
+      "scene": "pentium",
+      "selo": "30 OUT",
+      "highlight": ["erro", "Pentium", "quarta", "casa", "decimal", "475", "milhões", "@curiosidadetechhoje"]
+    }
+  }
+}

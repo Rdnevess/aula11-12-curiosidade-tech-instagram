@@ -8,3 +8,10 @@ __pycache__/
 
 # Documentos de processo (spec e plano), mantidos só localmente
 docs/
+
+# Reels: gerados pela skill (voz, quadros, vídeos de trabalho) e as skills em si
+reels/*/audio/
+reels/*/build/
+reels/*/out/
+reels-video/
+motion-3d-design/

@@ -1,0 +1,36 @@
+{
+  "lines": [
+    "Sabia que o Facebook começou com um site proibido?",
+    "Em outubro de 2003, Zuckerberg criou o Facemash em Harvard.",
+    "Duas fotos de alunos, pegas sem permissão: quem é mais bonito?",
+    "450 visitantes em 4 horas… e Harvard derrubou o site.",
+    "Siga @curiosidadetechhoje!"
+  ],
+  "pronounce": { "@curiosidadetechhoje": "arroba curiosidade téc hoje", "Tec Toy": "Téc Tói" },
+  "voice": {
+    "mode": "take",
+    "voices": ["Puck"],
+    "outDir": "audio",
+    "language": "pt",
+    "note": "Leia em português do Brasil, voz de criador de conteúdo no Instagram: animada, próxima, confiante, ritmo rápido e claro, sem exagero. Fale como quem conta uma curiosidade surpreendente. 'arroba curiosidade téc hoje' são palavras em português; 'téc' rima com 'chéque'. VERY fast — must fit in about 15 seconds, never slow down. Fale exatamente o texto: ",
+    "anchors": [["em", "outubro"], ["duas", "fotos"], ["450|quatrocentos"], ["siga"]],
+    "prefer": "curiosidade.{0,3}te[ck]",
+    "maxSeconds": 16.5,
+    "speedupMax": 0.1
+  },
+  "render": {
+    "name": "facemash",
+    "stage": "../curiosidade.html",
+    "out": "out/{name}.mp4",
+    "build": "build",
+    "fps": 30, "width": 1080, "height": 1920,
+    "lead": 0.25,
+    "cover": "S1+1.0",
+    "pops": true,
+    "data": {
+      "scene": "facemash",
+      "selo": "28 OUT",
+      "highlight": ["Facebook", "Facemash", "sem", "permissão", "450", "@curiosidadetechhoje"]
+    }
+  }
+}
