@@ -83,6 +83,62 @@ class MontarTest(unittest.TestCase):
         with self.assertRaises(montar.ErroMontagem):
             montar.montar(self.pasta, ROTEIRO, executar=executar, conferir=lambda p: [])
 
+    def _velhos(self):
+        (self.pasta / "audio").mkdir(parents=True, exist_ok=True)
+        (self.pasta / "audio" / "Puck.json").write_text('{"velho": true}', encoding="utf-8")
+        (self.pasta / "audio" / "Puck.t1.wav").write_bytes(b"velho")
+        (self.pasta / "out").mkdir(parents=True, exist_ok=True)
+        (self.pasta / "out" / "diario-Puck.mp4").write_bytes(b"velho")
+
+    def test_take_sem_puck_json_cai_em_segments_mesmo_com_voz_velha(self):
+        self._velhos()
+        modos = []
+
+        def executar(cmd, cwd, **kw):
+            if "tts.mjs" in cmd[1]:
+                modo = json.loads((Path(cwd) / "reel.json").read_text(encoding="utf-8"))["voice"]["mode"]
+                modos.append(modo)
+                self.assertFalse((Path(cwd) / "audio" / "Puck.json").exists())
+                if modo == "segments":
+                    (Path(cwd) / "audio" / "Puck.json").write_text("{}", encoding="utf-8")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            return self.executar_falso()(cmd, cwd=cwd, **kw)
+
+        montar.montar(self.pasta, ROTEIRO, executar=executar, conferir=lambda p: [])
+        self.assertEqual(modos, ["take", "segments"])
+        self.assertFalse((self.pasta / "audio" / "Puck.t1.wav").exists())
+
+    def test_segments_sem_puck_json_falha(self):
+        self._velhos()
+
+        def executar(cmd, cwd, **kw):
+            if "tts.mjs" in cmd[1]:
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            return self.executar_falso()(cmd, cwd=cwd, **kw)
+
+        with self.assertRaises(montar.ErroMontagem):
+            montar.montar(self.pasta, ROTEIRO, executar=executar, conferir=lambda p: [])
+
+    def test_render_sem_mp4_novo_falha_mesmo_com_mp4_velho(self):
+        self._velhos()
+
+        def executar(cmd, cwd, **kw):
+            if "tts.mjs" in cmd[1]:
+                return self.executar_falso()(cmd, cwd=cwd, **kw)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with self.assertRaises(montar.ErroMontagem):
+            montar.montar(self.pasta, ROTEIRO, executar=executar, conferir=lambda p: [])
+
+
+class PastaDoDiaTest(unittest.TestCase):
+    def test_ensaio_tem_pasta_propria(self):
+        from datetime import date
+        from scripts.diario import config
+        dia = date(2026, 11, 3)
+        self.assertEqual(config.pasta_do_dia(dia).name, "diario-2026-11-03")
+        self.assertEqual(config.pasta_do_dia(dia, ensaio=True).name, "diario-2026-11-03-ensaio")
+
 
 if __name__ == "__main__":
     unittest.main()

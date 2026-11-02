@@ -100,7 +100,7 @@ def rodar(dia, sem_publicar=False, d=None):
         fato = d.pesquisar(dia, historico.temas(hist))
         etapa = "roteiro"
         roteiro, tentativa = d.gerar_roteiro(fato)
-        pasta = config.pasta_do_dia(dia)
+        pasta = config.pasta_do_dia(dia, ensaio=sem_publicar)
         d.salvar_json(pasta, "pesquisa.json", fato)
         d.salvar_json(pasta, "roteiro.json", roteiro)
         etapa = "vídeo"

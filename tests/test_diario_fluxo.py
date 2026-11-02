@@ -70,6 +70,13 @@ class RodarTest(unittest.TestCase):
         self.assertNotIn("2026-11-03", e["hist"])
         self.assertIn("ensaio", e["textos"][-1])
 
+    def test_ensaio_usa_pasta_propria(self):
+        d, e = deps()
+        pastas = []
+        d.montar = lambda pasta, roteiro: (pastas.append(pasta), (Path("out.mp4"), []))[1]
+        fluxo.rodar(DIA, sem_publicar=True, d=d)
+        self.assertEqual(pastas[0].name, "diario-2026-11-03-ensaio")
+
     def test_erro_avisa_e_propaga(self):
         d, e = deps(publicar_erro=RuntimeError("execução 9: error — Invalid OAuth 2.0 Access Token"))
         with self.assertRaises(RuntimeError):

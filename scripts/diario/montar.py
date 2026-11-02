@@ -70,6 +70,15 @@ def _rodar(executar, script, args, pasta, env):
     return r, (r.stdout or "") + (r.stderr or "")
 
 
+def _limpar_audio(pasta):
+    # Sem isso, uma tomada que falha sem escrever Puck.json deixaria a voz de uma execução antiga em uso.
+    audio = pasta / "audio"
+    if audio.is_dir():
+        for item in audio.iterdir():
+            if item.is_file():
+                item.unlink()
+
+
 def montar(pasta, roteiro, executar=subprocess.run, conferir=conferir_video):
     pasta = Path(pasta)
     pasta.mkdir(parents=True, exist_ok=True)
@@ -77,17 +86,22 @@ def montar(pasta, roteiro, executar=subprocess.run, conferir=conferir_video):
     arquivo = pasta / "reel.json"
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
     env = {**os.environ, "ENV_FILE": str(RAIZ / ".env"), "CHROME_PATH": CHROME, "TAKES": "2"}
+    voz = pasta / "audio" / "Puck.json"
+    mp4 = pasta / "out" / "diario-Puck.mp4"
+    _limpar_audio(pasta)
     r, saida_take = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
     saida_segments = ""
-    if r.returncode != 0 or "ALINHAMENTO SUSPEITO" in saida_take or not (pasta / "audio" / "Puck.json").exists():
+    if r.returncode != 0 or "ALINHAMENTO SUSPEITO" in saida_take or not voz.exists():
         dados["voice"] = {"mode": "segments", "voices": ["Puck"], "outDir": "audio", "style": ESTILO}
         dados["render"]["gap"] = 0.1
         arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+        _limpar_audio(pasta)
         r, saida_segments = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
-        if r.returncode != 0:
+        if r.returncode != 0 or not voz.exists():
             raise ErroMontagem(f"voz falhou: {saida_segments[-400:]}")
+    # Idem para o vídeo: um render que falha não pode devolver o mp4 de uma execução antiga.
+    mp4.unlink(missing_ok=True)
     r, saida_render = _rodar(executar, "render.mjs", ["reel.json", "--voice", "audio/Puck.json"], pasta, env)
-    mp4 = pasta / "out" / "diario-Puck.mp4"
     if r.returncode != 0 or not mp4.exists():
         raise ErroMontagem(f"render falhou: {saida_render[-400:]}")
     with (pasta / "log.txt").open("a", encoding="utf-8") as log:

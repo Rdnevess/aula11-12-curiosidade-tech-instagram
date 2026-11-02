@@ -22,8 +22,9 @@ def chaves():
     return {nome: env.get(nome, "") for nome in NOMES_CHAVES}
 
 
-def pasta_do_dia(dia):
-    return PASTA_REELS / f"diario-{dia.isoformat()}"
+def pasta_do_dia(dia, ensaio=False):
+    # O ensaio (--sem-publicar) usa pasta própria: nunca sobrescreve o vídeo real do dia.
+    return PASTA_REELS / f"diario-{dia.isoformat()}{'-ensaio' if ensaio else ''}"
 
 
 def selo(dia):
