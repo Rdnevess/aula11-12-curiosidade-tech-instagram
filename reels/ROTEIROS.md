@@ -7,7 +7,7 @@ Voz Puck (Gemini TTS, tomada única), ≤ 20 s por vídeo, cartão final de 3,6 
 |---|---|---|
 | s1 | Sabia que o **Facebook** começou com um site proibido? | Ícone genérico de rede social + carimbo âmbar "PROIBIDO" com glitch |
 | s2 | Em outubro de 2003, Zuckerberg criou o **Facemash** em Harvard. | Data "28/10/2003" + janela de navegador estilo 2003 "facemash" |
-| s3 | Duas fotos de alunos, pegas **sem permissão**: quem é mais bonito? | Duas silhuetas lado a lado, botões de voto piscando |
+| s3 | Duas fotos de alunos, **sem permissão**: quem é mais bonito? | Duas silhuetas lado a lado, botões de voto piscando |
 | s4 | **450** visitantes em 4 horas… e Harvard derrubou o site. | Contador até 450, depois tela "site fora do ar" |
 | s5 | Siga **@curiosidadetechhoje**! | Cartão final |
 
