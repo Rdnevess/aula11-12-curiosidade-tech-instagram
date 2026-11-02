@@ -115,6 +115,72 @@ function caption(t, S, D, lines, hideFrom = Infinity) {
 // ── silhueta genérica (nunca rosto real) ───────────────────────────────────
 const silhueta = (cor) => `<svg width="220" height="240" viewBox="0 0 220 240"><circle cx="110" cy="80" r="52" fill="${cor}"/><path d="M20 240c0-60 40-96 90-96s90 36 90 96z" fill="${cor}"/></svg>`
 
+// ── catálogo da curiosidade diária ─────────────────────────────────────────
+const h = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const ICONES = {
+  chip: '<rect x="55" y="55" width="90" height="90" rx="10"/><path d="M75 55V35M100 55V35M125 55V35M75 145v20M100 145v20M125 145v20M55 75H35M55 100H35M55 125H35M145 75h20M145 100h20M145 125h20"/>',
+  celular: '<rect x="65" y="25" width="70" height="150" rx="14"/><path d="M90 42h20M97 158h6"/>',
+  computador: '<rect x="30" y="40" width="140" height="95" rx="8"/><path d="M80 165h40M100 135v30"/>',
+  console: '<rect x="25" y="70" width="150" height="70" rx="35"/><path d="M60 95v20M50 105h20"/><circle cx="135" cy="98" r="6"/><circle cx="150" cy="114" r="6"/>',
+  cartucho: '<path d="M55 30h90v120l-10 20H65l-10-20z"/><rect x="70" y="60" width="60" height="55" rx="6"/>',
+  globo: '<circle cx="100" cy="100" r="70"/><path d="M30 100h140M100 30c-30 35-30 105 0 140M100 30c30 35 30 105 0 140"/>',
+  satelite: '<rect x="80" y="80" width="40" height="40" rx="4"/><rect x="18" y="85" width="52" height="30"/><rect x="130" y="85" width="52" height="30"/><path d="M70 100h10M120 100h10M100 80V58"/><circle cx="100" cy="50" r="8"/>',
+  foguete: '<path d="M100 20c30 30 35 80 20 120H80C65 100 70 50 100 20z"/><circle cx="100" cy="75" r="12"/><path d="M80 140l-20 25M120 140l20 25M100 145v30"/>',
+  robo: '<rect x="50" y="60" width="100" height="85" rx="14"/><circle cx="80" cy="100" r="9"/><circle cx="120" cy="100" r="9"/><path d="M85 125h30M100 60V38"/><circle cx="100" cy="32" r="6"/>',
+  servidor: '<rect x="45" y="30" width="110" height="40" rx="6"/><rect x="45" y="80" width="110" height="40" rx="6"/><rect x="45" y="130" width="110" height="40" rx="6"/><path d="M65 50h20M65 100h20M65 150h20"/>',
+  email: '<rect x="30" y="50" width="140" height="100" rx="8"/><path d="M30 55l70 55 70-55"/>',
+  disquete: '<path d="M40 30h100l20 20v120H40z"/><rect x="65" y="30" width="60" height="45"/><rect x="60" y="110" width="80" height="60"/>',
+}
+const icone = (nome) => `<svg viewBox="0 0 200 200" width="300" height="300" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ICONES.chip}</svg>`
+const fmtNum = (v, alvo) => Number.isInteger(alvo) ? Math.round(v).toLocaleString('pt-BR')
+  : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+// Cada bloco ocupa a faixa da cena (y 880–1500): html(d, i) e anim(t, tIn, d, i) → tempo de pop extra ou null.
+const BLOCOS = {
+  gancho: {
+    html: (d, i) => `<div class="panel" style="position:absolute;left:330px;top:40px;width:420px;height:420px;display:grid;place-items:center;color:var(--muted)">${icone(d.icone)}</div>
+      <div class="stamp" id="b${i}s" style="left:640px;top:400px">${h(d.carimbo)}</div>`,
+    anim(t, tIn, d, i) {
+      const at = tIn + 0.6
+      show($(`#b${i}s`), t, at, Infinity, { dy: 0, s: 1.8, dur: 0.22, base: 'translate(-50%,-50%) rotate(-12deg)' })
+      glitch($(`#b${i}`), t, at)
+      return at
+    },
+  },
+  data: { html: (d) => `<div class="date" style="position:absolute;top:220px">${h(d.texto)}</div>`, anim: () => null },
+  numero: {
+    html: (d, i) => `<div class="num" id="b${i}n" style="position:absolute;top:140px"></div><div class="sub" style="position:absolute;top:310px">${h(d.legenda)}</div>`,
+    anim(t, tIn, d, i) {
+      const el = $(`#b${i}n`), final = `${d.prefixo || ''}${fmtNum(d.valor, d.valor)}${d.sufixo || ''}`
+      el.style.fontSize = `${Math.min(130, Math.floor(860 / (final.length * 0.6)))}px`
+      el.textContent = `${d.prefixo || ''}${fmtNum(easeOut(clamp((t - tIn - 0.1) / 1.1)) * d.valor, d.valor)}${d.sufixo || ''}`
+      return tIn + 1.2
+    },
+  },
+  fato: {
+    html: (d) => `<div class="panel" style="position:absolute;left:150px;top:120px;width:780px;padding:50px 56px;font-weight:900;font-size:56px;line-height:1.12;letter-spacing:-1px">${h(d.texto)}</div>`,
+    anim: () => null,
+  },
+  'linha-do-tempo': {
+    html: (d, i) => `<div style="position:absolute;left:150px;width:780px;top:160px;height:160px">
+        <div style="position:absolute;left:60px;right:60px;top:56px;height:8px;background:var(--line);border-radius:4px"></div>
+        <div id="b${i}f" style="position:absolute;left:60px;top:56px;height:8px;width:0;background:var(--brand);border-radius:4px"></div>
+        <div style="position:absolute;left:0;top:96px;font:800 52px var(--mono)">${h(d.de)}</div>
+        <div style="position:absolute;right:0;top:96px;font:800 52px var(--mono);color:var(--brand)">${h(d.ate)}</div></div>
+      <div class="sub" style="position:absolute;top:360px">${h(d.rotulo)}</div>`,
+    anim(t, tIn, d, i) {
+      $(`#b${i}f`).style.width = `${easeOut(clamp((t - tIn - 0.1) / 0.9)) * 660}px`
+      return null
+    },
+  },
+  comparacao: {
+    html: (d) => [[d.esquerda, d.rotulos[0], 'var(--alert)', 150], [d.direita, d.rotulos[1], 'var(--brand)', 560]].map(([v, r, cor, x]) =>
+      `<div class="panel" style="position:absolute;left:${x}px;top:120px;width:370px;height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
+         <div style="font:500 30px var(--mono);color:var(--muted);letter-spacing:2px">${h(r)}</div>
+         <div style="font-weight:900;font-size:64px;color:${cor};text-align:center;line-height:1.05">${h(v)}</div></div>`).join(''),
+    anim: () => null,
+  },
+}
+
 // ── cenas ──────────────────────────────────────────────────────────────────
 // build(d) devolve o HTML; frame(t, S, D, d) posiciona tudo e devolve os tempos dos "pops".
 // S[i]/D[i] = início/duração do trecho i da locução (5 trechos: gancho, data, fato, número, CTA).
@@ -225,6 +291,24 @@ const SCENES = {
       return [warnAt, S[1] + 0.55, S[2] + 0.1, S[2] + D[2] * 0.6, S[3] + 1.55]
     },
   },
+  // Curiosidade diária: um bloco do catálogo por trecho (data.trechos[i] = {bloco, dados}).
+  // Cada bloco entra 0,25 s depois do início do trecho (o anterior termina de sumir) e sai antes do próximo.
+  auto: {
+    build: (d) => d.trechos.map((tr, i) =>
+      `<div class="abs" id="b${i}" style="left:0;right:0;top:880px;height:620px">${BLOCOS[tr.bloco].html(tr.dados, i)}</div>`).join(''),
+    frame(t, S, D, d) {
+      const eventos = []
+      d.trechos.forEach((tr, i) => {
+        const tIn = i === 0 ? 0 : S[i] + 0.25
+        const tOut = i + 1 < S.length ? S[i + 1] - 0.05 : Infinity
+        show($(`#b${i}`), t, tIn, tOut, { dy: 60 })
+        const extra = BLOCOS[tr.bloco].anim(t, tIn, tr.dados, i)
+        eventos.push(tIn + 0.1)
+        if (extra != null) eventos.push(extra)
+      })
+      return eventos
+    },
+  },
   // ── fim das cenas
 }
 
@@ -238,7 +322,8 @@ window.setup = function ({ S, D, lines, data, voiceEnd }) {
   HI = new RegExp(`^(${(data.highlight || []).map(esc).join('|') || '$^'})$`, 'i')
   $('#scene').innerHTML = sc.build(data)
   const last = S.length - 1
-  const outroAt = S[last] - 0.1 // o cartão final entra junto com o CTA falado
+  // por padrão o cartão final entra junto com a última fala; endAfterLast = depois dela, sem fala
+  const outroAt = data.endAfterLast ? S[last] + D[last] + 0.3 : S[last] - 0.1
   window.TL = { S, D, lines, data, sc, outroAt, total: Math.max(voiceEnd + 0.6, outroAt + (data.endHold ?? 3.6)) }
   return { total: window.TL.total, outroAt }
 }

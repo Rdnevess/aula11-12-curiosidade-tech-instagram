@@ -1,0 +1,6 @@
+{"voice": "Rascunho", "mode": "take", "file": "x.wav", "duration": 24,
+ "segs": [{"start": 0, "end": 3.6}, {"start": 3.6, "end": 8}, {"start": 8, "end": 11}, {"start": 11, "end": 15},
+          {"start": 15, "end": 20}, {"start": 20, "end": 24}],
+ "lines": ["Sabia que um cachorro foi o primeiro ser vivo em órbita?", "Em novembro de 1957, a União Soviética lançou o Sputnik 2.",
+           "A bordo estava a cadela Laika.", "O satélite pesava 508 quilos.", "Foram quatro anos até o voo de Gagarin em 1961.",
+           "Uma corrida que mudou a tecnologia espacial."]}
