@@ -18,7 +18,7 @@ def _cmd(subcomando):
     config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
     arquivo.write_text(f'@echo off\r\ncd /d "{config.RAIZ}"\r\nset PYTHONIOENCODING=utf-8\r\n'
                        f'"{sys.executable}" -m scripts.diario {subcomando} >> "diario\\{subcomando}.log" 2>&1\r\n',
-                       encoding="utf-8")
+                       encoding="utf-8", newline="")
     return arquivo
 
 
@@ -41,7 +41,13 @@ def main(argumentos):
         sys.exit(__doc__)
     comando, resto = argumentos[0], argumentos[1:]
     if comando == "rodar":
-        dia = date.fromisoformat(resto[resto.index("--data") + 1]) if "--data" in resto else date.today()
+        if "--data" in resto:
+            indice = resto.index("--data") + 1
+            if indice >= len(resto):
+                sys.exit(__doc__)
+            dia = date.fromisoformat(resto[indice])
+        else:
+            dia = date.today()
         print(fluxo.rodar(dia, sem_publicar="--sem-publicar" in resto))
     elif comando == "verificar":
         print(f"{fluxo.verificar()} clique(s)")

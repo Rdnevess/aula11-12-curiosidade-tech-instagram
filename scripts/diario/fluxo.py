@@ -79,16 +79,22 @@ def _fontes(fato):
     return ", ".join(sorted({f["dominio"] for f in fato.get("fontes", [])})) or "nenhuma"
 
 
+def _aviso_pos_publicacao(permalink, erro):
+    return f"⚠️ publicado ({permalink}), mas falhou ao salvar o histórico: {erro}"
+
+
 def rodar(dia, sem_publicar=False, d=None):
     from scripts.diario.roteiro import numeros_do_roteiro
     from scripts.diario.telegram import texto_pendente
 
     d = d or Dependencias.reais()
-    hist, chave = d.historico_carregar(), dia.isoformat()
-    if not sem_publicar and historico.ja_resolvido(hist, chave):
-        return "pulado"
-    etapa = "pré-checagem"
+    chave = dia.isoformat()
+    etapa = "histórico"
     try:
+        hist = d.historico_carregar()
+        if not sem_publicar and historico.ja_resolvido(hist, chave):
+            return "pulado"
+        etapa = "pré-checagem"
         d.prechecar()
         etapa = "pesquisa"
         fato = d.pesquisar(dia, historico.temas(hist))
@@ -112,13 +118,20 @@ def rodar(dia, sem_publicar=False, d=None):
         if ok:
             etapa = "publicação"
             resultado = d.publicar(mp4, roteiro["legenda_post"])
-            historico.registrar(hist, chave, {**base, "status": "publicado", "permalink": resultado["permalink"],
-                                              "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
-            d.historico_salvar(hist)
-            d.avisar_texto(f"✅ Publicado: {roteiro['titulo']}\n{resultado['permalink']}\nFontes: {_fontes(fato)}")
+            # Publicação já aconteceu: uma falha a partir daqui (salvar histórico, avisar) não pode
+            # ser reportada como "falhou em publicação" nem propagar — isso faria o dia parecer não
+            # resolvido e repetiria a publicação (post duplicado) numa próxima execução.
+            try:
+                historico.registrar(hist, chave, {**base, "status": "publicado", "permalink": resultado["permalink"],
+                                                  "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
+                d.historico_salvar(hist)
+                d.avisar_texto(f"✅ Publicado: {roteiro['titulo']}\n{resultado['permalink']}\nFontes: {_fontes(fato)}")
+            except Exception as erro_pos:
+                d.avisar_texto(_aviso_pos_publicacao(resultado["permalink"], erro_pos))
             return "publicado"
         historico.registrar(hist, chave, {**base, "status": "pendente", "motivos": motivos})
         d.historico_salvar(hist)
+        etapa = "aviso no Telegram"
         d.avisar_video(mp4, texto_pendente(roteiro, fato, motivos), chave)
         return "pendente"
     except Exception as erro:
@@ -130,26 +143,33 @@ def verificar(d=None):
     d = d or Dependencias.reais()
     hist = d.historico_carregar()
     cliques, novo = d.ler_cliques(d.offset_ler())
-    for clique in cliques:
-        registro = hist.get(clique["dia"])
-        if not registro or registro.get("status") != "pendente":
-            d.responder(clique["id"], "Esse dia já resolvido: nada a fazer.")
-            continue
-        if clique["acao"] == "desc":
-            registro["status"] = "descartado"
-            d.historico_salvar(hist)
-            d.responder(clique["id"], "Descartado.")
-            continue
-        try:
-            resultado = d.publicar(Path(registro["video"]), registro["legenda_post"])
-        except Exception as erro:
-            d.responder(clique["id"], "Falhou; veja a mensagem.")
-            d.avisar_texto(mensagem_erro("publicação", erro))
-            continue
-        registro.update(status="publicado", permalink=resultado["permalink"],
-                        publicado_em=datetime.now().astimezone().isoformat(timespec="seconds"))
-        d.historico_salvar(hist)
-        d.responder(clique["id"], "Publicado!")
-        d.avisar_texto(f"✅ Publicado: {registro['titulo']}\n{resultado['permalink']}")
-    d.offset_salvar(novo)
+    try:
+        for clique in cliques:
+            registro = hist.get(clique["dia"])
+            if not registro or registro.get("status") != "pendente":
+                d.responder(clique["id"], "Esse dia já resolvido: nada a fazer.")
+                continue
+            if clique["acao"] == "desc":
+                registro["status"] = "descartado"
+                d.historico_salvar(hist)
+                d.responder(clique["id"], "Descartado.")
+                continue
+            try:
+                resultado = d.publicar(Path(registro["video"]), registro["legenda_post"])
+            except Exception as erro:
+                d.responder(clique["id"], "Falhou; veja a mensagem.")
+                d.avisar_texto(mensagem_erro("publicação", erro))
+                continue
+            registro.update(status="publicado", permalink=resultado["permalink"],
+                            publicado_em=datetime.now().astimezone().isoformat(timespec="seconds"))
+            # Mesma regra de rodar(): publicação já aconteceu, então uma falha ao salvar/avisar
+            # não pode parecer uma falha de publicação nem travar o salvamento do offset.
+            try:
+                d.historico_salvar(hist)
+                d.responder(clique["id"], "Publicado!")
+                d.avisar_texto(f"✅ Publicado: {registro['titulo']}\n{resultado['permalink']}")
+            except Exception as erro_pos:
+                d.avisar_texto(_aviso_pos_publicacao(resultado["permalink"], erro_pos))
+    finally:
+        d.offset_salvar(novo)
     return len(cliques)

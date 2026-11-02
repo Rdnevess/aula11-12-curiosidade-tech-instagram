@@ -76,6 +76,43 @@ class RodarTest(unittest.TestCase):
             fluxo.rodar(DIA, d=d)
         self.assertIn("Instagram TEP", e["textos"][-1])
 
+    def test_historico_carregar_falha_avisa_e_propaga(self):
+        d, e = deps()
+
+        def quebra():
+            raise RuntimeError("disco cheio")
+
+        d.historico_carregar = quebra
+        with self.assertRaises(RuntimeError):
+            fluxo.rodar(DIA, d=d)
+        self.assertIn("histórico", e["textos"][-1])
+
+    def test_falha_ao_salvar_historico_apos_publicar_nao_reporta_falha_na_publicacao(self):
+        d, e = deps()
+        chamadas = []
+
+        def historico_salvar_quebrado(dados):
+            chamadas.append(dados)
+            raise RuntimeError("disco cheio")
+
+        d.historico_salvar = historico_salvar_quebrado
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(e["publicados"], [(Path("out.mp4"), "legenda")])
+        self.assertEqual(len(chamadas), 1)
+        self.assertFalse(any("falhou em publicação" in t for t in e["textos"]))
+        self.assertTrue(any("⚠️" in t for t in e["textos"]))
+
+    def test_pendente_falha_no_aviso_reporta_etapa_aviso_no_telegram(self):
+        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+
+        def avisar_video_quebrado(mp4, legenda, dia_iso):
+            raise RuntimeError("telegram fora")
+
+        d.avisar_video = avisar_video_quebrado
+        with self.assertRaises(RuntimeError):
+            fluxo.rodar(DIA, d=d)
+        self.assertIn("aviso no Telegram", e["textos"][-1])
+
 
 class VerificarTest(unittest.TestCase):
     def test_publica_pendente_e_ignora_resolvido(self):
@@ -105,6 +142,24 @@ class VerificarTest(unittest.TestCase):
         self.assertEqual(e["publicados"], [])
         self.assertEqual(e["respostas"], [("a", "Falhou; veja a mensagem.")])
         self.assertIn("Instagram TEP", e["textos"][-1])
+
+    def test_falha_ao_salvar_historico_apos_publicar_continua_e_salva_offset(self):
+        hist = {"2026-11-03": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"}}
+        cliques = [{"acao": "pub", "dia": "2026-11-03", "id": "a"}]
+        d, e = deps(historico=hist, cliques=cliques)
+        chamadas = []
+
+        def historico_salvar_quebrado(dados):
+            chamadas.append(dados)
+            raise RuntimeError("disco cheio")
+
+        d.historico_salvar = historico_salvar_quebrado
+        self.assertEqual(fluxo.verificar(d), 1)
+        self.assertEqual(e["publicados"], [(Path("out.mp4"), "leg")])
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(e["offset"], 1)
+        self.assertFalse(any("falhou em publicação" in t for t in e["textos"]))
+        self.assertTrue(any("⚠️" in t for t in e["textos"]))
 
 
 if __name__ == "__main__":
