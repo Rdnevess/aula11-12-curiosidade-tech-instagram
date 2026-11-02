@@ -16,8 +16,8 @@ ROTEIRO = {
          "dados": {"icone": "satelite", "carimbo": "ÓRBITA"}},
         {"fala": "Em novembro de 1957, a União Soviética lançou o Sputnik 2.", "bloco": "data",
          "dados": {"texto": "03/11/1957"}},
-        {"fala": "A bordo estava a cadela Laika.", "bloco": "fato", "dados": {"texto": "A bordo: a cadela Laika"}},
-        {"fala": "O satélite pesava 508 quilos.", "bloco": "numero",
+        {"fala": "Dentro dele estava a cadela Laika.", "bloco": "fato", "dados": {"texto": "A bordo: a cadela Laika"}},
+        {"fala": "Esse satélite pesava 508 quilos.", "bloco": "numero",
          "dados": {"valor": 508, "prefixo": "", "sufixo": " kg", "legenda": "peso do Sputnik 2"}},
     ],
     "destaques": ["Sputnik", "Laika", "508"],
@@ -95,6 +95,32 @@ class ValidarTest(unittest.TestCase):
     def test_dados_nao_e_dict(self):
         problemas = roteiro.validar(com(lambda r: r["trechos"][0].update(dados=["a", "b"])), DIA, FATO["fato"])
         self.assertTrue(problemas)
+
+    def test_titulo_obrigatorio(self):
+        for valor in (None, "", "   ", 5):
+            problemas = roteiro.validar(com(lambda r: r.update(titulo=valor)), DIA, FATO["fato"])
+            self.assertTrue(any("titulo" in p for p in problemas), repr(valor))
+        problemas = roteiro.validar(com(lambda r: r.pop("titulo")), DIA, FATO["fato"])
+        self.assertTrue(any("titulo" in p for p in problemas))
+
+    def test_ancora_de_uma_letra_a_partir_do_segundo_trecho(self):
+        problemas = roteiro.validar(com(lambda r: r["trechos"][2].update(fala="A bordo estava a cadela Laika.")),
+                                    DIA, FATO["fato"])
+        self.assertTrue(any("trecho 3" in p and "âncora" in p for p in problemas))
+        # o 1º trecho não tem âncora
+        problemas = roteiro.validar(com(lambda r: r["trechos"][0].update(fala="E se um cachorro fosse ao espaço?")),
+                                    DIA, FATO["fato"])
+        self.assertEqual(problemas, [])
+
+    def test_ancora_ignora_travessao_e_exige_palavra(self):
+        travessao = chr(8212)
+        meia_risca = chr(8211)
+        ok = com(lambda r: r["trechos"][2].update(fala=travessao + " Dentro dele estava a cadela Laika."))
+        self.assertEqual(roteiro.validar(ok, DIA, FATO["fato"]), [])
+        for traco in (travessao, meia_risca):
+            problemas = roteiro.validar(com(lambda r: r["trechos"][1].update(
+                fala=traco + " 1957 foi o ano do Sputnik 2.")), DIA, FATO["fato"])
+            self.assertTrue(any("trecho 2" in p for p in problemas), traco)
 
 
 class NumerosTest(unittest.TestCase):

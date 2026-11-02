@@ -4,6 +4,7 @@ from datetime import date
 
 from scripts.diario import gemini
 from scripts.diario.config import MAX_PALAVRAS, selo
+from scripts.diario.texto import ancoras
 
 ICONES = ("chip", "celular", "computador", "console", "cartucho", "globo", "satelite", "foguete", "robo",
           "servidor", "email", "disquete")
@@ -17,7 +18,7 @@ BLOCOS = {
     "comparacao": {"esquerda": 14, "direita": 14, "rotulos": "par"},
 }
 OPCIONAIS = {"prefixo", "sufixo"}
-PONTUACAO = re.compile(r"[…?!.,:;\"“”()]")
+PONTUACAO = re.compile(r"[…?!.,:;\"“”()—–]")
 
 PROMPT = """Escreva o roteiro de um Reel de até 26 segundos de fala, em português do Brasil, para o perfil
 @curiosidadetechhoje, sobre o fato abaixo. Use SOMENTE informações do fato.
@@ -27,6 +28,7 @@ Regras:
 - 4 a 6 trechos curtos, no máximo {max_palavras} palavras somando todos, tom de criador de conteúdo falando com "você".
 - O 1º trecho é um gancho que gera curiosidade; o último fecha a história. Nenhum trecho cita o @ nem pede para seguir.
 - Todo trecho começa com uma palavra (nunca com número). Escreva números com algarismos.
+- Do 2º trecho em diante, a 1ª palavra tem pelo menos 2 letras (não comece com "A", "O" ou "E" sozinhos).
 - Cada trecho tem um bloco visual do catálogo; dois trechos seguidos não podem usar o mesmo bloco; o 1º é "gancho".
 - Catálogo (campo: limite):
   gancho: icone (um de {icones}), carimbo (≤ 12 caracteres, MAIÚSCULAS)
@@ -134,6 +136,12 @@ def validar(roteiro, dia_evento, fato_texto):
             problemas.append(f"trecho {i + 1}: deve começar com uma palavra, não com número")
         if "@" in fala:
             problemas.append(f"trecho {i + 1}: a fala não pode ter @")
+    for i, palavras in enumerate(ancoras([f if isinstance(f, str) else "" for f in falas]), start=2):
+        if not palavras or len(palavras[0]) < 2:
+            problemas.append(f"trecho {i}: a âncora (1ª palavra) precisa ter 2+ letras e vir antes de qualquer número")
+    titulo = roteiro.get("titulo")
+    if not isinstance(titulo, str) or not titulo.strip():
+        problemas.append("titulo deve ser um texto não vazio")
     if roteiro.get("data") != dia_evento.isoformat():
         problemas.append(f"data do roteiro deve ser {dia_evento.isoformat()}")
     if roteiro.get("selo") != selo(dia_evento):

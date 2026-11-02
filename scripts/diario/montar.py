@@ -1,13 +1,12 @@
 """Monta o Reel do dia: reel.json → voz (tts.mjs) → vídeo (render.mjs) → conferência."""
 import json
 import os
-import re
 import subprocess
-import unicodedata
 from pathlib import Path
 
 from scripts.conferir_reel import ler_video, moov_antes_de_mdat, validar_video
 from scripts.diario.config import CHROME, END_HOLD, MAX_FALA, MAX_VIDEO, RAIZ, SKILL
+from scripts.diario.texto import ancoras
 
 NOTA = ("Leia em português do Brasil, voz de criador de conteúdo no Instagram: animada, próxima, confiante, "
         "ritmo rápido e claro, sem exagero. Conte como uma curiosidade surpreendente. Must fit in about 25 seconds "
@@ -18,28 +17,6 @@ ESTILO = ("Leia em português do Brasil, voz de criador de conteúdo no Instagra
 
 class ErroMontagem(Exception):
     pass
-
-
-def norm(palavra):
-    sem_acento = unicodedata.normalize("NFD", palavra.lower())
-    return re.sub(r"[^a-z0-9]", "", sem_acento)
-
-
-def ancoras(falas):
-    resultado = []
-    for fala in falas[1:]:
-        palavras = []
-        for bruta in fala.split():
-            n = norm(bruta)
-            if not n:
-                continue
-            if n[0].isdigit():
-                break
-            palavras.append(n)
-            if len(palavras) == 2:
-                break
-        resultado.append(palavras)
-    return resultado
 
 
 def reel_json(roteiro):
