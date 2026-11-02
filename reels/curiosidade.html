@@ -126,7 +126,8 @@ const SCENES = {
         <div class="stamp" id="fmStamp">PROIBIDO</div>
       </div>
       <div class="abs date" id="fmDate" style="top:880px">28/10/2003</div>
-      <div class="abs num" id="fmNum" style="top:880px"></div>
+      <div class="abs num" id="fmNum" style="top:850px"></div>
+      <div class="abs sub" id="fmSub" style="top:990px">visitantes em 4 horas</div>
       ${panel('fmWin', 'left:150px;top:1050px;width:780px;height:450px;overflow:hidden', `
         <div class="bar"><i></i><i></i><i></i><span style="margin-left:14px">facemash.com</span></div>
         <div style="display:flex;justify-content:space-around;padding:30px 30px 0">
@@ -146,8 +147,9 @@ const SCENES = {
       show($('#fmTag'), t, S[2] + D[2] * 0.45)
       $('#fmA').style.outline = $('#fmB').style.outline = 'none'
       if (t >= S[2] + 0.7 && t < S[3]) (blink(t, 2) ? $('#fmA') : $('#fmB')).style.outline = '6px solid var(--brand)'
-      show($('#fmNum'), t, S[3], S[4] - 0.1)
-      $('#fmNum').textContent = `${count(t, S[3], 1.0, 450)} visitas`
+      show($('#fmNum'), t, S[3] + 0.25, S[4] - 0.1)
+      $('#fmNum').textContent = `${count(t, S[3] + 0.35, 1.0, 450)}`
+      show($('#fmSub'), t, S[3] + 0.25, S[4] - 0.1)
       show($('#fmOff'), t, offAt, Infinity, { dy: 0, s: 1.05 })
       glitch($('#fmWin'), t, offAt)
       return [stampAt, S[1] + 0.35, S[2] + 0.1, S[2] + 0.35, offAt]
@@ -212,15 +214,15 @@ const SCENES = {
       show($('#ptWarn'), t, warnAt, Infinity, { dy: 0, s: 0.3, dur: 0.3 })
       if (t >= warnAt + 0.3) $('#ptWarn').style.opacity = blink(t, 2.5) ? '1' : '0.35'
       glitch($('#ptChip'), t, warnAt)
-      show($('#ptDate'), t, S[1], S[3] - 0.05)
-      show($('#ptCalc'), t, S[1] + 0.3, S[3] - 0.05)
-      typeText($('#ptOp'), t, S[1] + 0.5, S[1] + D[1] * 0.85, '4.195.835 ÷ 3.145.727')
+      show($('#ptDate'), t, S[1] + 0.25, S[3] - 0.05)
+      show($('#ptCalc'), t, S[1] + 0.55, S[3] - 0.05)
+      typeText($('#ptOp'), t, S[1] + 0.75, S[1] + D[1] * 0.85, '4.195.835 ÷ 3.145.727')
       show($('#ptRes'), t, S[2] + 0.1)
       show($('#ptOk'), t, S[2] + D[2] * 0.6)
       show($('#ptNum'), t, S[3] + 0.25, S[4] - 0.1)
       $('#ptNum').textContent = `US$ ${count(t, S[3] + 0.35, 1.2, 475)} mi`
       show($('#ptSub'), t, S[3] + 0.5, S[4] - 0.1)
-      return [warnAt, S[1] + 0.3, S[2] + 0.1, S[2] + D[2] * 0.6, S[3] + 1.55]
+      return [warnAt, S[1] + 0.55, S[2] + 0.1, S[2] + D[2] * 0.6, S[3] + 1.55]
     },
   },
   // ── fim das cenas

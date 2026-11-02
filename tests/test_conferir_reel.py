@@ -9,7 +9,7 @@ REEL = {
     "lines": [
         "Sabia que o Facebook começou com um site proibido?",
         "Em outubro de 2003, Zuckerberg criou o Facemash em Harvard.",
-        "Duas fotos de alunos, pegas sem permissão: quem é mais bonito?",
+        "Duas fotos de alunos, sem permissão: quem é mais bonito?",
         "450 visitantes em 4 horas… e Harvard derrubou o site.",
         "Siga @curiosidadetechhoje!",
     ],
@@ -105,7 +105,9 @@ class FaststartTest(unittest.TestCase):
         for tipo in caixas:
             f.write((8).to_bytes(4, "big") + tipo)
         f.close()
-        return Path(f.name)
+        path = Path(f.name)
+        self.addCleanup(path.unlink)
+        return path
 
     def test_moov_antes(self):
         self.assertTrue(moov_antes_de_mdat(self._mp4(b"ftyp", b"moov", b"mdat")))
