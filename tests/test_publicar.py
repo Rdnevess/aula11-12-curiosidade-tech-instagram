@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -63,7 +64,12 @@ class PublicarArquivoTest(unittest.TestCase):
     def _publicar(self, run_data, registrar_erro=None):
         execucao = {"id": "9", "status": "success", "data": {"resultData": {"runData": run_data}}}
         registrar = mock.Mock(side_effect=registrar_erro)
-        with mock.patch.object(publicar_mod, "buscar_workflow", return_value={"id": "w"}),              mock.patch.object(publicar_mod, "ultimo_id", return_value=1),              mock.patch.object(publicar_mod, "_enviar"),              mock.patch.object(publicar_mod, "esperar_execucao", return_value=execucao),              mock.patch.object(publicar_mod, "registrar", registrar):
+        with (mock.patch.object(publicar_mod, "buscar_workflow", return_value={"id": "w"}),
+              mock.patch.object(publicar_mod, "ultimo_id", return_value=1),
+              mock.patch.object(publicar_mod, "_enviar"),
+              mock.patch.object(publicar_mod, "esperar_execucao", return_value=execucao),
+              mock.patch.object(publicar_mod, "registrar", registrar),
+              mock.patch("sys.stderr", new_callable=io.StringIO)):
             return publicar_mod.publicar_arquivo(Path("posts/post-aula11.jpg"), "x"), registrar
 
     @staticmethod

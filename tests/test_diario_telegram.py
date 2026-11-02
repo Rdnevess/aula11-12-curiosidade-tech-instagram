@@ -41,16 +41,25 @@ class TelegramTest(unittest.TestCase):
 
     def test_ler_cliques_filtra_chat_e_formato(self):
         updates = [
-            {"update_id": 10, "callback_query": {"id": "a", "data": "pub:2026-11-03", "message": {"chat": {"id": 42}}}},
+            {"update_id": 10, "callback_query": {"id": "a", "data": "pub:2026-11-03",
+                                                 "message": {"message_id": 7, "chat": {"id": 42}}}},
             {"update_id": 11, "callback_query": {"id": "b", "data": "pub:2026-11-03", "message": {"chat": {"id": 99}}}},
             {"update_id": 12, "callback_query": {"id": "c", "data": "lixo", "message": {"chat": {"id": 42}}}},
             {"update_id": 13, "message": {"chat": {"id": 42}, "text": "oi"}},
         ]
         g = Gravador(updates)
         cliques, offset = telegram.ler_cliques("T", "42", 5, chamar=g)
-        self.assertEqual(cliques, [{"acao": "pub", "dia": "2026-11-03", "id": "a"}])
+        self.assertEqual(cliques, [{"acao": "pub", "dia": "2026-11-03", "id": "a", "message_id": 7}])
         self.assertEqual(offset, 14)
         self.assertEqual(g.chamadas[0]["campos"]["offset"], 5)
+
+    def test_remover_botoes(self):
+        g = Gravador({})
+        telegram.remover_botoes("T", "42", 7, chamar=g)
+        c = g.chamadas[0]
+        self.assertEqual(c["metodo"], "editMessageReplyMarkup")
+        self.assertEqual((c["campos"]["chat_id"], c["campos"]["message_id"]), ("42", 7))
+        self.assertEqual(json.loads(c["campos"]["reply_markup"]), {"inline_keyboard": []})
 
     def test_chats(self):
         g = Gravador([{"update_id": 1, "message": {"chat": {"id": 42, "first_name": "Rodrigo"}, "text": "/start"}}])

@@ -22,9 +22,11 @@ class Dependencias:
     avisar_video: Callable
     ler_cliques: Callable
     responder: Callable
+    remover_botoes: Callable
     offset_ler: Callable
     offset_salvar: Callable
     salvar_json: Callable
+    hoje: Callable = date.today
 
     @classmethod
     def reais(cls):
@@ -60,6 +62,7 @@ class Dependencias:
             avisar_video=lambda mp4, legenda, dia_iso: telegram.enviar_video(token, chat, mp4, legenda, dia_iso),
             ler_cliques=lambda offset: telegram.ler_cliques(token, chat, offset),
             responder=lambda cid, texto: telegram.responder(token, cid, texto),
+            remover_botoes=lambda message_id: telegram.remover_botoes(token, chat, message_id),
             offset_ler=lambda: int(config.OFFSET.read_text()) if config.OFFSET.exists() else 0,
             offset_salvar=lambda o: (config.OFFSET.parent.mkdir(parents=True, exist_ok=True),
                                      config.OFFSET.write_text(str(o))),
@@ -177,23 +180,41 @@ def rodar(dia, sem_publicar=False, d=None):
         raise
 
 
+def _tratar_clique(d, clique):
+    dia_iso = clique["dia"]
+    # Relido a cada clique: rodar pode ter gravado algo, e um clique anterior do mesmo lote também.
+    registro = d.historico_carregar().get(dia_iso)
+    if not registro or registro.get("status") != "pendente":
+        _tentar(d.responder, clique["id"], "Esse dia já resolvido: nada a fazer.")
+        return
+    if clique["acao"] == "desc":
+        d.historico_atualizar(dia_iso, {"status": "descartado"})
+        _tentar(d.responder, clique["id"], "Descartado.")
+        _tentar(d.avisar_texto, f"🗑 Descartado: {registro.get('titulo', dia_iso)}")
+        return
+    if dia_iso != d.hoje().isoformat():
+        # O vídeo diz "hoje" e traz o selo do dia: publicá-lo em outro dia estaria errado.
+        d.historico_atualizar(dia_iso, {"status": "expirado"})
+        _tentar(d.responder, clique["id"], "Expirou.")
+        _tentar(d.avisar_texto, f"⌛ expirou: o vídeo era para {dia_iso[8:10]}/{dia_iso[5:7]} "
+                                f"({registro.get('titulo', '')}); não foi publicado.")
+        return
+    _, erro = _publicar(d, dia_iso, registro["titulo"], Path(registro["video"]), registro["legenda_post"])
+    _tentar(d.responder, clique["id"], "Falhou; veja a mensagem." if erro else "Publicado!")
+
+
 def verificar(d=None):
     d = d or Dependencias.reais()
     cliques, novo = d.ler_cliques(d.offset_ler())
     try:
         for clique in cliques:
-            # Relido a cada clique: rodar pode ter gravado algo, e um clique anterior do mesmo lote também.
-            registro = d.historico_carregar().get(clique["dia"])
-            if not registro or registro.get("status") != "pendente":
-                d.responder(clique["id"], "Esse dia já resolvido: nada a fazer.")
-                continue
-            if clique["acao"] == "desc":
-                d.historico_atualizar(clique["dia"], {"status": "descartado"})
-                d.responder(clique["id"], "Descartado.")
-                continue
-            _, erro = _publicar(d, clique["dia"], registro["titulo"], Path(registro["video"]),
-                                registro["legenda_post"])
-            d.responder(clique["id"], "Falhou; veja a mensagem." if erro else "Publicado!")
+            try:
+                _tratar_clique(d, clique)
+            except Exception as erro:
+                _tentar(d.avisar_texto, mensagem_erro(f"clique {clique['acao']} de {clique['dia']}", erro))
+            if clique.get("message_id") is not None:
+                # Melhor esforço: com polling a cada 10 min, o Telegram pode recusar mexer em cliques antigos.
+                _tentar(d.remover_botoes, clique["message_id"])
     finally:
         d.offset_salvar(novo)
     return len(cliques)

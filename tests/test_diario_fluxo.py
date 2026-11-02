@@ -12,9 +12,9 @@ CONF_OK = {"data_confirmada": True, "numeros": [], "fontes": FATO["fontes"]}
 DIA = date(2026, 11, 3)
 
 
-def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None):
+def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA):
     estado = {"hist": historico if historico is not None else {}, "textos": [], "videos": [], "publicados": [],
-              "respostas": [], "offset": 0}
+              "respostas": [], "offset": 0, "botoes": []}
 
     def atualizar(dia_iso, campos):
         estado["hist"].setdefault(dia_iso, {}).update(campos)
@@ -38,9 +38,11 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None):
         avisar_video=lambda mp4, legenda, dia_iso: estado["videos"].append((mp4, dia_iso)),
         ler_cliques=lambda offset: (list(cliques), offset + len(cliques)),
         responder=lambda cid, texto: estado["respostas"].append((cid, texto)),
+        remover_botoes=lambda message_id: estado["botoes"].append(message_id),
         offset_ler=lambda: estado["offset"],
         offset_salvar=lambda o: estado.update(offset=o),
         salvar_json=lambda pasta, nome, dados: None,
+        hoje=lambda: hoje,
     )
     return d, estado
 
@@ -218,6 +220,56 @@ class VerificarTest(unittest.TestCase):
         self.assertEqual(e["offset"], 1)
         self.assertFalse(any("falhou em publicação" in t for t in e["textos"]))
         self.assertTrue(any("⚠️" in t for t in e["textos"]))
+
+
+    def test_responder_quebrado_nao_interrompe_nem_esconde_avisos(self):
+        hist = {"2026-11-03": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"},
+                "2026-11-01": {"titulo": "Velho", "status": "pendente", "video": "v.mp4", "legenda_post": "l"}}
+        cliques = [{"acao": "pub", "dia": "2026-11-03", "id": "a", "message_id": 7},
+                   {"acao": "desc", "dia": "2026-11-01", "id": "b", "message_id": 8}]
+        d, e = deps(historico=hist, cliques=cliques)
+
+        def responder(cid, texto):
+            raise RuntimeError("Telegram answerCallbackQuery: Bad Request: query is too old")
+
+        def remover_botoes(message_id):
+            e["botoes"].append(message_id)
+            raise RuntimeError("message is not modified")
+
+        d.responder, d.remover_botoes = responder, remover_botoes
+        self.assertEqual(fluxo.verificar(d), 2)
+        self.assertEqual(e["hist"]["2026-11-03"]["status"], "publicado")
+        self.assertEqual(e["hist"]["2026-11-01"]["status"], "descartado")
+        self.assertTrue(any(t.startswith("✅") for t in e["textos"]))
+        self.assertTrue(any(t.startswith("🗑") and "Velho" in t for t in e["textos"]))
+        self.assertEqual(e["botoes"], [7, 8])
+        self.assertEqual(e["offset"], 2)
+
+    def test_responder_quebrado_nao_esconde_falha_de_publicacao(self):
+        hist = {"2026-11-03": {"titulo": "S", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"}}
+        d, e = deps(historico=hist, cliques=[{"acao": "pub", "dia": "2026-11-03", "id": "a"}],
+                    publicar_erro=RuntimeError("timed out"))
+        d.responder = lambda cid, texto: (_ for _ in ()).throw(RuntimeError("query is too old"))
+        self.assertEqual(fluxo.verificar(d), 1)
+        self.assertTrue(any(t.startswith("❌") for t in e["textos"]))
+
+    def test_erro_inesperado_num_clique_avisa_e_segue_para_o_proximo(self):
+        hist = {"2026-11-03": {"titulo": "S", "status": "pendente"},  # sem video/legenda: registro quebrado
+                "2026-11-01": {"titulo": "Velho", "status": "pendente"}}
+        cliques = [{"acao": "pub", "dia": "2026-11-03", "id": "a"}, {"acao": "desc", "dia": "2026-11-01", "id": "b"}]
+        d, e = deps(historico=hist, cliques=cliques)
+        self.assertEqual(fluxo.verificar(d), 2)
+        self.assertTrue(any(t.startswith("❌") for t in e["textos"]))
+        self.assertEqual(e["hist"]["2026-11-01"]["status"], "descartado")
+        self.assertEqual(e["offset"], 2)
+
+    def test_pendente_de_outro_dia_expira_em_vez_de_publicar(self):
+        hist = {"2026-11-01": {"titulo": "Velho", "status": "pendente", "video": "v.mp4", "legenda_post": "l"}}
+        d, e = deps(historico=hist, cliques=[{"acao": "pub", "dia": "2026-11-01", "id": "a"}])
+        self.assertEqual(fluxo.verificar(d), 1)
+        self.assertEqual(e["publicados"], [])
+        self.assertEqual(e["hist"]["2026-11-01"]["status"], "expirado")
+        self.assertIn("⌛ expirou: o vídeo era para 01/11", e["textos"][-1])
 
 
 if __name__ == "__main__":

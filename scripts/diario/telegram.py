@@ -110,12 +110,19 @@ def ler_cliques(token, chat, offset, chamar=chamar):
             continue
         achado = CLIQUE.match(cq.get("data") or "")
         if achado:
-            cliques.append({"acao": achado.group(1), "dia": achado.group(2), "id": cq["id"]})
+            cliques.append({"acao": achado.group(1), "dia": achado.group(2), "id": cq["id"],
+                            "message_id": cq["message"].get("message_id")})
     return cliques, novo
 
 
 def responder(token, callback_id, texto, chamar=chamar):
     return chamar(token, "answerCallbackQuery", {"callback_query_id": callback_id, "text": texto[:200]})
+
+
+def remover_botoes(token, chat, message_id, chamar=chamar):
+    """Tira os botões Publicar/Descartar da mensagem do vídeo (o clique já foi tratado)."""
+    return chamar(token, "editMessageReplyMarkup", {"chat_id": chat, "message_id": message_id,
+                                                    "reply_markup": json.dumps({"inline_keyboard": []})})
 
 
 def chats(token, chamar=chamar):
