@@ -69,6 +69,20 @@ class ValidarReelTest(unittest.TestCase):
         problemas = validar_reel(com(lambda d: d["lines"].__setitem__(2, " ".join(["palavra"] * 30))))
         self.assertTrue(any("palavras" in p for p in problemas))
 
+    def test_speedupmax_deve_estar_presente_e_menor_igual_0_1(self):
+        problemas = validar_reel(com(lambda d: d["voice"].pop("speedupMax")))
+        self.assertTrue(any("speedupMax" in p for p in problemas))
+        problemas = validar_reel(com(lambda d: d["voice"].update(speedupMax=0.15)))
+        self.assertTrue(any("speedupMax" in p for p in problemas))
+
+    def test_pronuncia_exata_do_arroba(self):
+        problemas = validar_reel(com(lambda d: d["pronounce"].update({"@curiosidadetechhoje": "arroba curiosidade"})))
+        self.assertTrue(any("pronuncia" in p.lower() or "arroba curiosidade téc hoje" in p for p in problemas))
+
+    def test_cta_exato(self):
+        problemas = validar_reel(com(lambda d: d["lines"].__setitem__(-1, "Siga @curiosidadetechhoje")))
+        self.assertTrue(any("CTA" in p for p in problemas))
+
 
 class ValidarVideoTest(unittest.TestCase):
     def test_video_valido(self):

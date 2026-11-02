@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 ARROBA = "@curiosidadetechhoje"
+PRONUNCIA_ARROBA = "arroba curiosidade téc hoje"
+CTA = "Siga @curiosidadetechhoje!"
 CENAS = {"facemash", "megadrive", "pentium"}
 MAX_FALA = 16.5
 MAX_PALAVRAS = 48
@@ -30,10 +32,12 @@ def validar_reel(dados):
         problemas.append("âncoras: deve haver uma por trecho a partir do 2º")
     if voz.get("maxSeconds", 99) > MAX_FALA:
         problemas.append(f"maxSeconds deve ser ≤ {MAX_FALA}")
-    if not linhas or ARROBA not in linhas[-1]:
-        problemas.append(f"o último trecho deve ser o CTA com {ARROBA}")
-    if ARROBA not in dados.get("pronounce", {}):
-        problemas.append(f"pronounce precisa dizer como falar {ARROBA}")
+    if "speedupMax" not in voz or voz.get("speedupMax", 99) > 0.1:
+        problemas.append("speedupMax deve estar presente e ser ≤ 0.1")
+    if not linhas or linhas[-1] != CTA:
+        problemas.append(f"o último trecho deve ser o CTA exato: {CTA}")
+    if dados.get("pronounce", {}).get(ARROBA) != PRONUNCIA_ARROBA:
+        problemas.append(f"pronounce[{ARROBA}] deve ser exatamente '{PRONUNCIA_ARROBA}'")
     if render.get("stage") != "../curiosidade.html" or cena.get("scene") not in CENAS:
         problemas.append("render deve usar ../curiosidade.html com uma cena da série")
     if (render.get("fps"), render.get("width"), render.get("height")) != (30, 1080, 1920):
