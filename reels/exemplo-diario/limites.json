@@ -1,0 +1,26 @@
+{
+  "lines": [
+    "Sabia que um cachorro foi o primeiro ser vivo em órbita?",
+    "Em novembro de 1957, a União Soviética lançou o Sputnik 2.",
+    "A bordo estava a cadela Laika.",
+    "O satélite pesava 508 quilos.",
+    "Foram quatro anos até o voo de Gagarin em 1961.",
+    "Uma corrida que mudou a tecnologia espacial."
+  ],
+  "render": {
+    "name": "limites", "stage": "../curiosidade.html", "out": "out/{name}.mp4", "build": "build",
+    "fps": 30, "width": 1080, "height": 1920, "lead": 0.25, "cover": "S1+1.0", "pops": true,
+    "data": {
+      "scene": "auto", "selo": "03 NOV", "highlight": ["Sputnik", "Laika", "508"],
+      "endAfterLast": true, "endHold": 2.5,
+      "trechos": [
+        {"bloco": "gancho", "dados": {"icone": "satelite", "carimbo": "WWWWWWWWWWWW"}},
+        {"bloco": "data", "dados": {"texto": "03/11/1957"}},
+        {"bloco": "fato", "dados": {"texto": "Este bloco de fato tem exatamente sessenta caracteres nesta."}},
+        {"bloco": "numero", "dados": {"valor": 3000000000, "prefixo": "US$ ", "sufixo": " bytes", "legenda": "legenda com vinte e oito chs"}},
+        {"bloco": "linha-do-tempo", "dados": {"de": 1957, "ate": 1961, "rotulo": "rotulo de vinte e quatro"}},
+        {"bloco": "comparacao", "dados": {"esquerda": "MMMMMMMMMMMMMM", "direita": "MMMMMMMMMMMMMM", "rotulos": ["RRRRRRRRRRRR", "SSSSSSSSSSSS"]}}
+      ]
+    }
+  }
+}

@@ -134,11 +134,31 @@ const ICONES = {
 const icone = (nome) => `<svg viewBox="0 0 200 200" width="300" height="300" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ICONES.chip}</svg>`
 const fmtNum = (v, alvo) => Number.isInteger(alvo) ? Math.round(v).toLocaleString('pt-BR')
   : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+// Encolhe font-size em passos até o texto caber em maxW. Mede com scrollWidth (imune a transform/
+// rotação) alternando white-space:nowrap só durante a medição, p/ pegar a largura "natural" do texto
+// mesmo em caixas esticadas (left:0;right:0) ou que terão wrap no render. Chamada uma única vez por
+// bloco em afterBuild (nunca por quadro — senão a fonte "pulsaria" a cada frame).
+function fit(el, maxW, maxFont, minFont = 24, step = 2) {
+  if (!el) return maxFont
+  const prevWS = el.style.whiteSpace
+  el.style.whiteSpace = 'nowrap'
+  let size = maxFont
+  el.style.fontSize = `${size}px`
+  while (size > minFont && el.scrollWidth > maxW) {
+    size -= step
+    el.style.fontSize = `${size}px`
+  }
+  el.style.whiteSpace = prevWS
+  return size
+}
 // Cada bloco ocupa a faixa da cena (y 880–1500): html(d, i) e anim(t, tIn, d, i) → tempo de pop extra ou null.
 const BLOCOS = {
   gancho: {
     html: (d, i) => `<div class="panel" style="position:absolute;left:330px;top:40px;width:420px;height:420px;display:grid;place-items:center;color:var(--muted)">${icone(d.icone)}</div>
       <div class="stamp" id="b${i}s" style="left:640px;top:400px">${h(d.carimbo)}</div>`,
+    // maxW=500 (scrollWidth, sem borda) mantém a caixa girada -12° com a borda direita ≤ x≈905
+    // mesmo no pior caso (carimbo de 12 caracteres em mono 84px) — ver task-6-report.md.
+    fit(d, i) { fit($(`#b${i}s`), 500, 84, 28) },
     anim(t, tIn, d, i) {
       const at = tIn + 0.6
       show($(`#b${i}s`), t, at, Infinity, { dy: 0, s: 1.8, dur: 0.22, base: 'translate(-50%,-50%) rotate(-12deg)' })
@@ -148,16 +168,21 @@ const BLOCOS = {
   },
   data: { html: (d) => `<div class="date" style="position:absolute;top:220px">${h(d.texto)}</div>`, anim: () => null },
   numero: {
-    html: (d, i) => `<div class="num" id="b${i}n" style="position:absolute;top:140px"></div><div class="sub" style="position:absolute;top:310px">${h(d.legenda)}</div>`,
+    html: (d, i) => `<div class="num" id="b${i}n" style="position:absolute;top:140px;white-space:nowrap"></div><div class="sub" style="position:absolute;top:310px">${h(d.legenda)}</div>`,
+    // Tamanho fixado uma vez, pelo texto FINAL (não pelo valor parcial do contador) — maxW=760
+    // centralizado em 1080 deixa a borda direita em x=920 sempre, não só no valor final.
+    fit(d, i) {
+      const el = $(`#b${i}n`)
+      el.textContent = `${d.prefixo || ''}${fmtNum(d.valor, d.valor)}${d.sufixo || ''}`
+      fit(el, 760, 130, 40)
+    },
     anim(t, tIn, d, i) {
-      const el = $(`#b${i}n`), final = `${d.prefixo || ''}${fmtNum(d.valor, d.valor)}${d.sufixo || ''}`
-      el.style.fontSize = `${Math.min(130, Math.floor(860 / (final.length * 0.6)))}px`
-      el.textContent = `${d.prefixo || ''}${fmtNum(easeOut(clamp((t - tIn - 0.1) / 1.1)) * d.valor, d.valor)}${d.sufixo || ''}`
+      $(`#b${i}n`).textContent = `${d.prefixo || ''}${fmtNum(easeOut(clamp((t - tIn - 0.1) / 1.1)) * d.valor, d.valor)}${d.sufixo || ''}`
       return tIn + 1.2
     },
   },
   fato: {
-    html: (d) => `<div class="panel" style="position:absolute;left:150px;top:120px;width:780px;padding:50px 56px;font-weight:900;font-size:56px;line-height:1.12;letter-spacing:-1px">${h(d.texto)}</div>`,
+    html: (d) => `<div class="panel" style="position:absolute;left:150px;top:120px;width:780px;padding:50px 56px;font-weight:900;font-size:56px;line-height:1.12;letter-spacing:-1px;overflow-wrap:anywhere">${h(d.texto)}</div>`,
     anim: () => null,
   },
   'linha-do-tempo': {
@@ -173,10 +198,16 @@ const BLOCOS = {
     },
   },
   comparacao: {
-    html: (d) => [[d.esquerda, d.rotulos[0], 'var(--alert)', 150], [d.direita, d.rotulos[1], 'var(--brand)', 560]].map(([v, r, cor, x]) =>
-      `<div class="panel" style="position:absolute;left:${x}px;top:120px;width:370px;height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
-         <div style="font:500 30px var(--mono);color:var(--muted);letter-spacing:2px">${h(r)}</div>
-         <div style="font-weight:900;font-size:64px;color:${cor};text-align:center;line-height:1.05">${h(v)}</div></div>`).join(''),
+    // rotulos ausente/curto não quebra: cai para '' em vez de indexar undefined.
+    html: (d, i) => { const rot = d.rotulos || []
+      return [[d.esquerda, rot[0] || '', 'var(--alert)', 150, 0], [d.direita, rot[1] || '', 'var(--brand)', 560, 1]].map(([v, r, cor, x, k]) =>
+        `<div class="panel" style="position:absolute;left:${x}px;top:120px;width:370px;height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px">
+           <div style="font:500 30px var(--mono);color:var(--muted);letter-spacing:2px">${h(r)}</div>
+           <div id="b${i}cp${k}" style="font-weight:900;font-size:64px;color:${cor};text-align:center;line-height:1.05;max-width:330px;overflow-wrap:anywhere">${h(v)}</div></div>`).join('')
+    },
+    // max-width:330px (painel 370px − ~20px de cada lado) + overflow-wrap:anywhere no HTML já
+    // garantem que nada escapa do painel; o fit() aqui só evita 3+ linhas (shrink p/ ~2 linhas).
+    fit(d, i) { fit($(`#b${i}cp0`), 640, 64, 30); fit($(`#b${i}cp1`), 640, 64, 30) },
     anim: () => null,
   },
 }
@@ -296,6 +327,11 @@ const SCENES = {
   auto: {
     build: (d) => d.trechos.map((tr, i) =>
       `<div class="abs" id="b${i}" style="left:0;right:0;top:880px;height:620px">${BLOCOS[tr.bloco].html(tr.dados, i)}</div>`).join(''),
+    // Ajustes de tamanho de texto (fit) uma única vez, com os elementos já no DOM e sem transform
+    // aplicado ainda — nunca dentro de frame()/anim(), senão rodaria 30x por segundo.
+    afterBuild(d) {
+      d.trechos.forEach((tr, i) => BLOCOS[tr.bloco].fit?.(tr.dados, i))
+    },
     frame(t, S, D, d) {
       const eventos = []
       d.trechos.forEach((tr, i) => {
@@ -321,6 +357,7 @@ window.setup = function ({ S, D, lines, data, voiceEnd }) {
   $('#selo').textContent = `HOJE NA HISTÓRIA DA TECH · ${data.selo || ''}`
   HI = new RegExp(`^(${(data.highlight || []).map(esc).join('|') || '$^'})$`, 'i')
   $('#scene').innerHTML = sc.build(data)
+  sc.afterBuild?.(data) // ajustes de tamanho (fit) uma única vez, com o DOM já montado
   const last = S.length - 1
   // por padrão o cartão final entra junto com a última fala; endAfterLast = depois dela, sem fala
   const outroAt = data.endAfterLast ? S[last] + D[last] + 0.3 : S[last] - 0.1
