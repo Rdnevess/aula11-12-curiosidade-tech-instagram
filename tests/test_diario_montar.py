@@ -69,7 +69,11 @@ class MontarTest(unittest.TestCase):
                       conferir=lambda p: [])
         tts = [c for c, _ in self.comandos if "tts.mjs" in c[1]]
         self.assertEqual(len(tts), 2)
-        self.assertEqual(json.loads((self.pasta / "reel.json").read_text(encoding="utf-8"))["voice"]["mode"], "segments")
+        reel = json.loads((self.pasta / "reel.json").read_text(encoding="utf-8"))
+        self.assertEqual(reel["voice"]["mode"], "segments")
+        self.assertEqual(reel["render"]["gap"], 0.1)
+        log_content = (self.pasta / "log.txt").read_text(encoding="utf-8")
+        self.assertIn("ALINHAMENTO SUSPEITO", log_content)
 
     def test_render_falhou(self):
         def executar(cmd, **kw):

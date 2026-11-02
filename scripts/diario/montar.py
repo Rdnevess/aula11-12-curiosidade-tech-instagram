@@ -77,17 +77,25 @@ def montar(pasta, roteiro, executar=subprocess.run, conferir=conferir_video):
     arquivo = pasta / "reel.json"
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
     env = {**os.environ, "ENV_FILE": str(RAIZ / ".env"), "CHROME_PATH": CHROME, "TAKES": "2"}
-    r, saida = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
-    if r.returncode != 0 or "ALINHAMENTO SUSPEITO" in saida or not (pasta / "audio" / "Puck.json").exists():
+    r, saida_take = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
+    saida_segments = ""
+    if r.returncode != 0 or "ALINHAMENTO SUSPEITO" in saida_take or not (pasta / "audio" / "Puck.json").exists():
         dados["voice"] = {"mode": "segments", "voices": ["Puck"], "outDir": "audio", "style": ESTILO}
+        dados["render"]["gap"] = 0.1
         arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
-        r, saida = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
+        r, saida_segments = _rodar(executar, "tts.mjs", ["reel.json", "Puck"], pasta, env)
         if r.returncode != 0:
-            raise ErroMontagem(f"voz falhou: {saida[-400:]}")
-    r, saida = _rodar(executar, "render.mjs", ["reel.json", "--voice", "audio/Puck.json"], pasta, env)
+            raise ErroMontagem(f"voz falhou: {saida_segments[-400:]}")
+    r, saida_render = _rodar(executar, "render.mjs", ["reel.json", "--voice", "audio/Puck.json"], pasta, env)
     mp4 = pasta / "out" / "diario-Puck.mp4"
     if r.returncode != 0 or not mp4.exists():
-        raise ErroMontagem(f"render falhou: {saida[-400:]}")
+        raise ErroMontagem(f"render falhou: {saida_render[-400:]}")
     with (pasta / "log.txt").open("a", encoding="utf-8") as log:
-        log.write(saida[-4000:] + "\n")
+        log.write("== voz (take) ==\n")
+        log.write(saida_take[-4000:] + "\n")
+        if saida_segments:
+            log.write("== voz (segments) ==\n")
+            log.write(saida_segments[-4000:] + "\n")
+        log.write("== render ==\n")
+        log.write(saida_render[-4000:] + "\n")
     return mp4, conferir(mp4)
