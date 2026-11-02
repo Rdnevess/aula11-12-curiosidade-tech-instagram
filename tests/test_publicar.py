@@ -60,6 +60,30 @@ class PublicarArquivoTest(unittest.TestCase):
                 publicar_mod.publicar_arquivo(Path("posts/post-aula11.jpg"), "x")
         self.assertIn("Invalid OAuth", str(ctx.exception))
 
+    def _publicar(self, run_data, registrar_erro=None):
+        execucao = {"id": "9", "status": "success", "data": {"resultData": {"runData": run_data}}}
+        registrar = mock.Mock(side_effect=registrar_erro)
+        with mock.patch.object(publicar_mod, "buscar_workflow", return_value={"id": "w"}),              mock.patch.object(publicar_mod, "ultimo_id", return_value=1),              mock.patch.object(publicar_mod, "_enviar"),              mock.patch.object(publicar_mod, "esperar_execucao", return_value=execucao),              mock.patch.object(publicar_mod, "registrar", registrar):
+            return publicar_mod.publicar_arquivo(Path("posts/post-aula11.jpg"), "x"), registrar
+
+    @staticmethod
+    def _no(json_):
+        return [{"data": {"main": [[{"json": json_}]]}}]
+
+    def test_falha_ao_registrar_nao_esconde_o_post_publicado(self):
+        resultado, registrar = self._publicar({"Link do post": self._no({"permalink": "https://ig/p/1"}),
+                                               "Preparar mídia": self._no({"tipo": "IMAGE"})},
+                                              registrar_erro=OSError("disco cheio"))
+        self.assertEqual(resultado["permalink"], "https://ig/p/1")
+        registrar.assert_called_once()
+
+    def test_sem_link_do_post_vira_erro_claro(self):
+        with self.assertRaises(publicar_mod.ErroPublicacao) as ctx:
+            self._publicar({"Preparar mídia": self._no({"tipo": "IMAGE"})})
+        self.assertIn("link do post", str(ctx.exception).lower())
+        with self.assertRaises(publicar_mod.ErroPublicacao):
+            self._publicar({"Link do post": self._no({"outro": 1})})
+
 
 if __name__ == "__main__":
     unittest.main()

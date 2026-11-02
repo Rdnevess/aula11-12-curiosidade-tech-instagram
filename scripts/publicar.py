@@ -103,11 +103,18 @@ def publicar_arquivo(caminho, legenda):
         erro = execucao["data"]["resultData"].get("error", {})
         raise ErroPublicacao(f"execução {execucao['id']}: {execucao['status']} — {erro.get('message', 'sem mensagem')}"
                              f"{' | ' + erro['description'] if erro.get('description') else ''}")
-    post = saida_json(execucao, "Link do post")
-    resultado = {"arquivo": caminho.name, "tipo": saida_json(execucao, "Preparar mídia")["tipo"],
+    post = saida_json(execucao, "Link do post") or {}
+    if not post.get("permalink"):
+        raise ErroPublicacao(f"execução {execucao['id']}: sucesso, mas sem o link do post (nó \"Link do post\"); "
+                             "confira no Instagram se o post foi publicado")
+    midia = saida_json(execucao, "Preparar mídia") or {}
+    resultado = {"arquivo": caminho.name, "tipo": midia.get("tipo", "?"),
                  "permalink": post["permalink"], "execucao_id": execucao["id"],
                  "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")}
-    registrar(resultado)
+    try:
+        registrar(resultado)
+    except (OSError, ValueError) as erro:  # o post já está no ar: anotar é só um extra
+        print(f"aviso: não consegui anotar em {RESULTADOS.name}: {erro}", file=sys.stderr)
     return resultado
 
 

@@ -83,6 +83,48 @@ def _aviso_pos_publicacao(permalink, erro):
     return f"⚠️ publicado ({permalink}), mas falhou ao salvar o histórico: {erro}"
 
 
+def _tentar(funcao, *args):
+    """Chamada de melhor esforço: uma falha aqui não pode interromper o fluxo."""
+    try:
+        funcao(*args)
+        return True
+    except Exception:
+        return False
+
+
+def texto_erro_publicacao(titulo, erro):
+    texto = (f"❌ a publicação de {titulo} falhou ou não pôde ser confirmada — "
+             f"confira o Instagram antes de tentar de novo: {str(erro)[:500]}")
+    if "Invalid OAuth" in str(erro):
+        texto += "\n(o token do Instagram foi recusado: renove a credencial Instagram TEP no n8n)"
+    return texto
+
+
+def _publicar(d, dia_iso, titulo, video, legenda, campos=None, rodape=""):
+    """Publica com o histórico sempre à frente: "publicando" antes, "publicado"/"erro_publicacao" depois.
+
+    Uma exceção depois do envio (tempo esgotado, link ausente...) não prova que o post não foi ao ar,
+    por isso o dia fica "erro_publicacao": não é publicado de novo sozinho nem por um novo clique.
+    Devolve (resultado, None) ou (None, erro) — o erro já foi avisado no Telegram.
+    """
+    d.historico_atualizar(dia_iso, {**(campos or {}), "status": "publicando"})
+    try:
+        resultado = d.publicar(video, legenda)
+    except Exception as erro:
+        _tentar(d.historico_atualizar, dia_iso, {"status": "erro_publicacao", "erro": str(erro)[:500]})
+        _tentar(d.avisar_texto, texto_erro_publicacao(titulo, erro))
+        return None, erro
+    # Publicação já aconteceu: uma falha daqui em diante não pode parecer falha de publicação.
+    try:
+        d.historico_atualizar(dia_iso, {"status": "publicado", "permalink": resultado["permalink"],
+                                        "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
+    except Exception as erro_pos:
+        _tentar(d.avisar_texto, _aviso_pos_publicacao(resultado["permalink"], erro_pos))
+        return resultado, None
+    _tentar(d.avisar_texto, f"✅ Publicado: {titulo}\n{resultado['permalink']}{rodape}")
+    return resultado, None
+
+
 def rodar(dia, sem_publicar=False, d=None):
     from scripts.diario.roteiro import numeros_do_roteiro
     from scripts.diario.telegram import texto_pendente
@@ -90,6 +132,7 @@ def rodar(dia, sem_publicar=False, d=None):
     d = d or Dependencias.reais()
     chave = dia.isoformat()
     etapa = "histórico"
+    avisado = False
     try:
         hist = d.historico_carregar()
         if not sem_publicar and historico.ja_resolvido(hist, chave):
@@ -117,16 +160,11 @@ def rodar(dia, sem_publicar=False, d=None):
                 "legenda_post": roteiro["legenda_post"], "pasta": str(pasta)}
         if ok:
             etapa = "publicação"
-            resultado = d.publicar(mp4, roteiro["legenda_post"])
-            # Publicação já aconteceu: uma falha a partir daqui (salvar histórico, avisar) não pode
-            # ser reportada como "falhou em publicação" nem propagar — isso faria o dia parecer não
-            # resolvido e repetiria a publicação (post duplicado) numa próxima execução.
-            try:
-                d.historico_atualizar(chave, {**base, "status": "publicado", "permalink": resultado["permalink"],
-                                              "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
-                d.avisar_texto(f"✅ Publicado: {roteiro['titulo']}\n{resultado['permalink']}\nFontes: {_fontes(fato)}")
-            except Exception as erro_pos:
-                d.avisar_texto(_aviso_pos_publicacao(resultado["permalink"], erro_pos))
+            _, erro_pub = _publicar(d, chave, roteiro["titulo"], mp4, roteiro["legenda_post"], base,
+                                    f"\nFontes: {_fontes(fato)}")
+            if erro_pub:
+                avisado = True
+                raise erro_pub
             return "publicado"
         etapa = "histórico"
         d.historico_atualizar(chave, {**base, "status": "pendente", "motivos": motivos})
@@ -134,17 +172,18 @@ def rodar(dia, sem_publicar=False, d=None):
         d.avisar_video(mp4, texto_pendente(roteiro, fato, motivos), chave)
         return "pendente"
     except Exception as erro:
-        d.avisar_texto(mensagem_erro(etapa, erro))
+        if not avisado:
+            d.avisar_texto(mensagem_erro(etapa, erro))
         raise
 
 
 def verificar(d=None):
     d = d or Dependencias.reais()
-    hist = d.historico_carregar()
     cliques, novo = d.ler_cliques(d.offset_ler())
     try:
         for clique in cliques:
-            registro = hist.get(clique["dia"])
+            # Relido a cada clique: rodar pode ter gravado algo, e um clique anterior do mesmo lote também.
+            registro = d.historico_carregar().get(clique["dia"])
             if not registro or registro.get("status") != "pendente":
                 d.responder(clique["id"], "Esse dia já resolvido: nada a fazer.")
                 continue
@@ -152,22 +191,9 @@ def verificar(d=None):
                 d.historico_atualizar(clique["dia"], {"status": "descartado"})
                 d.responder(clique["id"], "Descartado.")
                 continue
-            try:
-                resultado = d.publicar(Path(registro["video"]), registro["legenda_post"])
-            except Exception as erro:
-                d.responder(clique["id"], "Falhou; veja a mensagem.")
-                d.avisar_texto(mensagem_erro("publicação", erro))
-                continue
-            # Mesma regra de rodar(): publicação já aconteceu, então uma falha ao salvar/avisar
-            # não pode parecer uma falha de publicação nem travar o salvamento do offset.
-            try:
-                d.historico_atualizar(clique["dia"], {
-                    "status": "publicado", "permalink": resultado["permalink"],
-                    "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
-                d.responder(clique["id"], "Publicado!")
-                d.avisar_texto(f"✅ Publicado: {registro['titulo']}\n{resultado['permalink']}")
-            except Exception as erro_pos:
-                d.avisar_texto(_aviso_pos_publicacao(resultado["permalink"], erro_pos))
+            _, erro = _publicar(d, clique["dia"], registro["titulo"], Path(registro["video"]),
+                                registro["legenda_post"])
+            d.responder(clique["id"], "Falhou; veja a mensagem." if erro else "Publicado!")
     finally:
         d.offset_salvar(novo)
     return len(cliques)

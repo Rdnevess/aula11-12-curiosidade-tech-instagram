@@ -85,6 +85,27 @@ class RodarTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             fluxo.rodar(DIA, d=d)
         self.assertIn("Instagram TEP", e["textos"][-1])
+        self.assertEqual(len([t for t in e["textos"] if t.startswith("❌")]), 1)
+
+    def test_marca_publicando_antes_de_publicar(self):
+        d, e = deps()
+        vistos = []
+        publicar_original = d.publicar
+        d.publicar = lambda mp4, legenda: (vistos.append(e["hist"]["2026-11-03"]["status"]),
+                                           publicar_original(mp4, legenda))[1]
+        fluxo.rodar(DIA, d=d)
+        self.assertEqual(vistos, ["publicando"])
+        self.assertEqual(e["hist"]["2026-11-03"]["status"], "publicado")
+
+    def test_publicar_falha_marca_erro_publicacao_e_nao_repete(self):
+        d, e = deps(publicar_erro=TimeoutError("timed out"))
+        with self.assertRaises(TimeoutError):
+            fluxo.rodar(DIA, d=d)
+        self.assertEqual(e["hist"]["2026-11-03"]["status"], "erro_publicacao")
+        self.assertIn("a publicação de Sputnik 2 falhou ou não pôde ser confirmada", e["textos"][-1])
+        self.assertIn("confira o Instagram", e["textos"][-1])
+        self.assertIn("timed out", e["textos"][-1])
+        self.assertEqual(fluxo.rodar(DIA, d=d), "pulado")
 
     def test_historico_carregar_falha_avisa_e_propaga(self):
         d, e = deps()
@@ -161,15 +182,20 @@ class VerificarTest(unittest.TestCase):
         self.assertEqual(e["hist"]["2026-11-03"]["status"], "descartado")
         self.assertEqual(e["publicados"], [])
 
-    def test_publicar_falha_mantem_pendente(self):
+    def test_publicar_falha_marca_erro_publicacao_e_novo_clique_nao_faz_nada(self):
         hist = {"2026-11-03": {"titulo": "S", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"}}
         erro = RuntimeError("execução 9: error — Invalid OAuth 2.0 Access Token")
-        d, e = deps(historico=hist, cliques=[{"acao": "pub", "dia": "2026-11-03", "id": "a"}], publicar_erro=erro)
-        self.assertEqual(fluxo.verificar(d), 1)
-        self.assertEqual(e["hist"]["2026-11-03"]["status"], "pendente")
+        cliques = [{"acao": "pub", "dia": "2026-11-03", "id": "a"}, {"acao": "pub", "dia": "2026-11-03", "id": "b"}]
+        d, e = deps(historico=hist, cliques=cliques, publicar_erro=erro)
+        self.assertEqual(fluxo.verificar(d), 2)
+        self.assertEqual(e["hist"]["2026-11-03"]["status"], "erro_publicacao")
         self.assertEqual(e["publicados"], [])
-        self.assertEqual(e["respostas"], [("a", "Falhou; veja a mensagem.")])
-        self.assertIn("Instagram TEP", e["textos"][-1])
+        self.assertEqual(e["respostas"][0], ("a", "Falhou; veja a mensagem."))
+        self.assertIn("já resolvido", e["respostas"][1][1])
+        avisos = [t for t in e["textos"] if t.startswith("❌")]
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("a publicação de S falhou ou não pôde ser confirmada", avisos[0])
+        self.assertIn("Instagram TEP", avisos[0])
 
     def test_falha_ao_salvar_historico_apos_publicar_continua_e_salva_offset(self):
         hist = {"2026-11-03": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"}}
