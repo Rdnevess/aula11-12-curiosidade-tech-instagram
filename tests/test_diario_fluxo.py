@@ -1,3 +1,4 @@
+import copy
 import unittest
 from datetime import date
 from pathlib import Path
@@ -8,11 +9,15 @@ FATO = {"titulo": "Sputnik 2", "data": "1957-11-03", "fato": "…", "numeros": [
     {"dominio": "wikipedia.org", "url": "a"}, {"dominio": "nasa.gov", "url": "b"}]}
 ROTEIRO = {"titulo": "Sputnik 2", "trechos": [{"fala": "Oi."}], "legenda_post": "legenda"}
 CONF_OK = {"data_confirmada": True, "numeros": [], "fontes": FATO["fontes"]}
+DIA = date(2026, 11, 3)
 
 
 def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None):
     estado = {"hist": historico if historico is not None else {}, "textos": [], "videos": [], "publicados": [],
               "respostas": [], "offset": 0}
+
+    def atualizar(dia_iso, campos):
+        estado["hist"].setdefault(dia_iso, {}).update(campos)
 
     def publicar(mp4, legenda):
         if publicar_erro:
@@ -21,8 +26,8 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None):
         return {"permalink": "https://instagram/p/1"}
 
     d = fluxo.Dependencias(
-        historico_carregar=lambda: estado["hist"],
-        historico_salvar=lambda dados: estado.update(hist=dados),
+        historico_carregar=lambda: copy.deepcopy(estado["hist"]),
+        historico_atualizar=atualizar,
         prechecar=lambda: None,
         pesquisar=lambda dia, usados: dict(FATO),
         gerar_roteiro=lambda fato: (ROTEIRO, 1),
@@ -39,8 +44,6 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None):
     )
     return d, estado
 
-
-DIA = date(2026, 11, 3)
 
 
 class RodarTest(unittest.TestCase):
@@ -98,11 +101,15 @@ class RodarTest(unittest.TestCase):
         d, e = deps()
         chamadas = []
 
-        def historico_salvar_quebrado(dados):
-            chamadas.append(dados)
-            raise RuntimeError("disco cheio")
+        atualizar_original = d.historico_atualizar
 
-        d.historico_salvar = historico_salvar_quebrado
+        def historico_atualizar_quebrado(dia_iso, campos):
+            if campos.get("status") == "publicado":
+                chamadas.append(campos)
+                raise RuntimeError("disco cheio")
+            atualizar_original(dia_iso, campos)
+
+        d.historico_atualizar = historico_atualizar_quebrado
         self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
         self.assertEqual(e["publicados"], [(Path("out.mp4"), "legenda")])
         self.assertEqual(len(chamadas), 1)
@@ -119,6 +126,20 @@ class RodarTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             fluxo.rodar(DIA, d=d)
         self.assertIn("aviso no Telegram", e["textos"][-1])
+
+    def test_rodar_nao_apaga_o_que_verificar_gravou_durante_a_montagem(self):
+        hist = {"2026-11-02": {"titulo": "Ontem", "status": "pendente", "video": "v.mp4", "legenda_post": "l"}}
+        d, e = deps(conf={**CONF_OK, "data_confirmada": False}, historico=hist)
+
+        def montar_demorado(pasta, roteiro):
+            # verificar roda em paralelo e descarta o pendente de ontem
+            d.historico_atualizar("2026-11-02", {"status": "descartado"})
+            return Path("out.mp4"), []
+
+        d.montar = montar_demorado
+        self.assertEqual(fluxo.rodar(DIA, d=d), "pendente")
+        self.assertEqual(e["hist"]["2026-11-02"]["status"], "descartado")
+        self.assertEqual(e["hist"]["2026-11-03"]["status"], "pendente")
 
 
 class VerificarTest(unittest.TestCase):
@@ -156,11 +177,15 @@ class VerificarTest(unittest.TestCase):
         d, e = deps(historico=hist, cliques=cliques)
         chamadas = []
 
-        def historico_salvar_quebrado(dados):
-            chamadas.append(dados)
-            raise RuntimeError("disco cheio")
+        atualizar_original = d.historico_atualizar
 
-        d.historico_salvar = historico_salvar_quebrado
+        def historico_atualizar_quebrado(dia_iso, campos):
+            if campos.get("status") == "publicado":
+                chamadas.append(campos)
+                raise RuntimeError("disco cheio")
+            atualizar_original(dia_iso, campos)
+
+        d.historico_atualizar = historico_atualizar_quebrado
         self.assertEqual(fluxo.verificar(d), 1)
         self.assertEqual(e["publicados"], [(Path("out.mp4"), "leg")])
         self.assertEqual(len(chamadas), 1)

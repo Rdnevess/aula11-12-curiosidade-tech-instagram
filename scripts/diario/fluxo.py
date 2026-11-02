@@ -11,7 +11,7 @@ from scripts.diario import config, historico, trava
 @dataclass
 class Dependencias:
     historico_carregar: Callable
-    historico_salvar: Callable
+    historico_atualizar: Callable
     prechecar: Callable
     pesquisar: Callable
     gerar_roteiro: Callable
@@ -49,7 +49,7 @@ class Dependencias:
 
         return cls(
             historico_carregar=historico.carregar,
-            historico_salvar=historico.salvar,
+            historico_atualizar=historico.atualizar,
             prechecar=prechecar,
             pesquisar=lambda dia, usados: pesquisa.pesquisar(dia, usados, k["GEMINI_API_KEY"], config.MODELO),
             gerar_roteiro=lambda fato: roteiro.gerar_roteiro(fato, k["GEMINI_API_KEY"], config.MODELO),
@@ -122,15 +122,14 @@ def rodar(dia, sem_publicar=False, d=None):
             # ser reportada como "falhou em publicação" nem propagar — isso faria o dia parecer não
             # resolvido e repetiria a publicação (post duplicado) numa próxima execução.
             try:
-                historico.registrar(hist, chave, {**base, "status": "publicado", "permalink": resultado["permalink"],
-                                                  "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
-                d.historico_salvar(hist)
+                d.historico_atualizar(chave, {**base, "status": "publicado", "permalink": resultado["permalink"],
+                                              "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
                 d.avisar_texto(f"✅ Publicado: {roteiro['titulo']}\n{resultado['permalink']}\nFontes: {_fontes(fato)}")
             except Exception as erro_pos:
                 d.avisar_texto(_aviso_pos_publicacao(resultado["permalink"], erro_pos))
             return "publicado"
-        historico.registrar(hist, chave, {**base, "status": "pendente", "motivos": motivos})
-        d.historico_salvar(hist)
+        etapa = "histórico"
+        d.historico_atualizar(chave, {**base, "status": "pendente", "motivos": motivos})
         etapa = "aviso no Telegram"
         d.avisar_video(mp4, texto_pendente(roteiro, fato, motivos), chave)
         return "pendente"
@@ -150,8 +149,7 @@ def verificar(d=None):
                 d.responder(clique["id"], "Esse dia já resolvido: nada a fazer.")
                 continue
             if clique["acao"] == "desc":
-                registro["status"] = "descartado"
-                d.historico_salvar(hist)
+                d.historico_atualizar(clique["dia"], {"status": "descartado"})
                 d.responder(clique["id"], "Descartado.")
                 continue
             try:
@@ -160,12 +158,12 @@ def verificar(d=None):
                 d.responder(clique["id"], "Falhou; veja a mensagem.")
                 d.avisar_texto(mensagem_erro("publicação", erro))
                 continue
-            registro.update(status="publicado", permalink=resultado["permalink"],
-                            publicado_em=datetime.now().astimezone().isoformat(timespec="seconds"))
             # Mesma regra de rodar(): publicação já aconteceu, então uma falha ao salvar/avisar
             # não pode parecer uma falha de publicação nem travar o salvamento do offset.
             try:
-                d.historico_salvar(hist)
+                d.historico_atualizar(clique["dia"], {
+                    "status": "publicado", "permalink": resultado["permalink"],
+                    "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
                 d.responder(clique["id"], "Publicado!")
                 d.avisar_texto(f"✅ Publicado: {registro['titulo']}\n{resultado['permalink']}")
             except Exception as erro_pos:

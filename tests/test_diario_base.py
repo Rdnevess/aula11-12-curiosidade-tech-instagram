@@ -79,6 +79,27 @@ class HistoricoTest(unittest.TestCase):
         self.assertTrue(historico.repetido(de_novo, "lancamento do  SPUTNIK!"))
         self.assertEqual(json.loads(self.caminho.read_text(encoding="utf-8"))["2026-11-03"]["status"], "pendente")
 
+    def test_atualizar_mescla_so_o_dia_alterado(self):
+        # rodar carrega uma cópia e passa minutos montando o vídeo; nesse meio-tempo verificar
+        # muda outro dia no arquivo. Quando rodar grava o seu dia, a mudança do verificar sobrevive.
+        historico.atualizar("2026-11-01", {"titulo": "A", "status": "pendente"}, self.caminho)
+        copia_do_rodar = historico.carregar(self.caminho)
+        historico.atualizar("2026-11-01", {"status": "publicado"}, self.caminho)  # verificar
+        historico.atualizar("2026-11-03", {"titulo": "B", "status": "pendente"}, self.caminho)  # rodar
+        dados = historico.carregar(self.caminho)
+        self.assertEqual(copia_do_rodar["2026-11-01"]["status"], "pendente")
+        self.assertEqual(dados["2026-11-01"], {"titulo": "A", "status": "publicado"})
+        self.assertEqual(dados["2026-11-03"]["status"], "pendente")
+        self.assertIn("manual-pentium", dados)
+
+    def test_salvar_e_atomico_sem_sobras(self):
+        historico.atualizar("2026-11-03", {"status": "pendente"}, self.caminho)
+        self.assertEqual([p.name for p in self.caminho.parent.iterdir()], ["historico.json"])
+
+    def test_resolvidos_incluem_publicacao_em_andamento_ou_com_erro(self):
+        for status in ("publicando", "erro_publicacao", "publicado", "pendente"):
+            self.assertTrue(historico.ja_resolvido({"d": {"status": status}}, "d"), status)
+
 
 if __name__ == "__main__":
     unittest.main()
