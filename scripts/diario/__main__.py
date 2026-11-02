@@ -23,10 +23,15 @@ def _cmd(subcomando):
 
 
 def agendar(confirmar):
-    # Linha de comando em texto (não lista): o /TR precisa das aspas literais por causa dos espaços no caminho.
+    # Linha de comando em texto (não lista). O caminho tem espaços ("Aula Top Esp Programacao") e o
+    # schtasks tira as aspas de fora do /TR; por isso a forma documentada /TR "\"C:\...\x.cmd\"",
+    # com aspas internas escapadas que sobram na tarefa salva.
+    def tr(subcomando):
+        return f'/TR "\\"{_cmd(subcomando)}\\""'
+
     tarefas = [
-        f'schtasks /Create /F /SC DAILY /ST {config.HORARIO} /TN "CuriosidadeTech\\rodar" /TR "{_cmd("rodar")}"',
-        f'schtasks /Create /F /SC MINUTE /MO 10 /TN "CuriosidadeTech\\verificar" /TR "{_cmd("verificar")}"',
+        f'schtasks /Create /F /SC DAILY /ST {config.HORARIO} /TN "CuriosidadeTech\\rodar" {tr("rodar")}',
+        f'schtasks /Create /F /SC MINUTE /MO 10 /TN "CuriosidadeTech\\verificar" {tr("verificar")}',
     ]
     for tarefa in tarefas:
         print(tarefa)
