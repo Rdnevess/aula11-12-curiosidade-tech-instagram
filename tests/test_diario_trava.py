@@ -33,6 +33,12 @@ class DecidirTest(unittest.TestCase):
         self.assertFalse(trava.decidir(FATO, CONF, 1, ["duração 31 s"], False)[0])
         self.assertFalse(trava.decidir(FATO, CONF, 1, [], True)[0])
 
+    def test_valores_none_nao_lancam_excecao(self):
+        conf_com_none = {**CONF, "numeros": None, "fontes": None}
+        ok, motivos = trava.decidir(FATO, conf_com_none, 1, [], False)
+        self.assertFalse(ok)
+        self.assertTrue(len(motivos) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

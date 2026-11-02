@@ -1,5 +1,6 @@
 """Pesquisa da curiosidade do dia e checagem cruzada, com a busca do Google pelo Gemini."""
 import json
+import re
 from datetime import date
 
 from scripts.diario import gemini
@@ -59,6 +60,16 @@ def confirmar(fato, numeros, chave, modelo, gerar=gemini.gerar):
                                      numeros=json.dumps(numeros, ensure_ascii=False))
     texto, meta = gerar(prompt, chave, modelo, busca=True)
     resposta = gemini.extrair_json(texto)
+    numeros_resposta = [n for n in resposta.get("numeros", []) if isinstance(n, dict)]
+
+    # Ensure every requested number is represented
+    digitos_respondidos = {re.sub(r"\D", "", str(n.get("valor", ""))): n for n in numeros_resposta}
+    numeros_final = list(numeros_resposta)
+    for num_solicitado in numeros:
+        digitos_solicitados = re.sub(r"\D", "", str(num_solicitado))
+        if digitos_solicitados and digitos_solicitados not in digitos_respondidos:
+            numeros_final.append({"valor": num_solicitado, "confirmado": False})
+
     return {"data_confirmada": resposta.get("data_confirmada") is True,
-            "numeros": [n for n in resposta.get("numeros", []) if isinstance(n, dict)],
+            "numeros": numeros_final,
             "fontes": gemini.fontes_de(meta)}
