@@ -1,5 +1,4 @@
 """Roteiro do Reel diário: geração pelo Gemini e validação contra o catálogo de blocos."""
-import json
 import re
 from datetime import date
 
@@ -53,16 +52,25 @@ def _palavras(texto):
     return [PONTUACAO.sub("", p).lower() for p in texto.split() if PONTUACAO.sub("", p)]
 
 
-def _numeros(texto):
-    return set(re.findall(r"\d{2,}", re.sub(r"(?<=\d)[.,](?=\d)", "", str(texto))))
+def _numeros(valor):
+    # Regras pt-BR: "," é separador decimal (nunca removido); "." só é separador de
+    # milhar quando agrupa dígitos em blocos de exatamente 3 (ex.: "3.000.000").
+    if isinstance(valor, float) and valor.is_integer():
+        valor = int(valor)
+    texto = re.sub(r"\d{1,3}(?:\.\d{3})+", lambda m: m.group(0).replace(".", ""), str(valor))
+    return set(re.findall(r"\d{2,}", texto))
 
 
 def numeros_do_roteiro(roteiro):
     achados = set()
-    for trecho in roteiro.get("trechos", []):
+    trechos = roteiro.get("trechos")
+    for trecho in trechos if isinstance(trechos, list) else []:
+        if not isinstance(trecho, dict):
+            continue
         achados |= _numeros(trecho.get("fala", ""))
-        if trecho.get("bloco") != "data":
-            for valor in (trecho.get("dados") or {}).values():
+        dados = trecho.get("dados")
+        if trecho.get("bloco") != "data" and isinstance(dados, dict):
+            for valor in dados.values():
                 if not isinstance(valor, list):
                     achados |= _numeros(valor)
     return sorted(achados)
@@ -91,22 +99,35 @@ def _validar_dados(i, bloco, dados, problemas):
 
 def validar(roteiro, dia_evento, fato_texto):
     problemas = []
-    trechos = roteiro.get("trechos") or []
+    trechos = roteiro.get("trechos")
+    if trechos is None:
+        trechos = []
+    if not isinstance(trechos, list):
+        problemas.append("trechos deve ser uma lista")
+        return problemas
     if not 4 <= len(trechos) <= 6:
         problemas.append(f"esperados 4 a 6 trechos, há {len(trechos)}")
-    falas = [t.get("fala", "") for t in trechos]
+    falas = [t.get("fala", "") if isinstance(t, dict) else "" for t in trechos]
     total = sum(len(f.split()) for f in falas)
     if total > MAX_PALAVRAS:
         problemas.append(f"{total} palavras; o máximo é {MAX_PALAVRAS}")
-    if trechos and trechos[0].get("bloco") != "gancho":
+    blocos = [t.get("bloco") if isinstance(t, dict) else None for t in trechos]
+    if trechos and blocos[0] != "gancho":
         problemas.append("o 1º trecho deve usar o bloco gancho")
     for i, trecho in enumerate(trechos):
+        if not isinstance(trecho, dict):
+            problemas.append(f"trecho {i + 1}: deve ser um objeto")
+            continue
         bloco, fala = trecho.get("bloco"), trecho.get("fala", "")
+        dados = trecho.get("dados")
+        if dados is not None and not isinstance(dados, dict):
+            problemas.append(f"trecho {i + 1}: dados deve ser um objeto")
+            continue
         if bloco not in BLOCOS:
             problemas.append(f"trecho {i + 1}: bloco fora do catálogo: {bloco}")
         else:
-            _validar_dados(i, bloco, trecho.get("dados") or {}, problemas)
-        if i and bloco == trechos[i - 1].get("bloco"):
+            _validar_dados(i, bloco, dados or {}, problemas)
+        if i and bloco == blocos[i - 1]:
             problemas.append(f"trecho {i + 1}: mesmo bloco do trecho anterior")
         primeira = _palavras(fala)[:1]
         if not primeira or primeira[0][0].isdigit():
@@ -145,7 +166,11 @@ def gerar_roteiro(fato, chave, modelo, gerar=gemini.gerar, tentativas=3):
         except gemini.ErroGemini as erro:
             problemas = [str(erro)]
             continue
-        problemas = validar(roteiro, dia_evento, fato["fato"])
+        try:
+            problemas = validar(roteiro, dia_evento, fato["fato"])
+        except (TypeError, AttributeError, ValueError) as erro:
+            problemas = [f"roteiro malformado: {erro}"]
+            continue
         if not problemas:
             return roteiro, tentativa
     raise ErroRoteiro("roteiro inválido após " + str(tentativas) + " tentativas: " + "; ".join(problemas))

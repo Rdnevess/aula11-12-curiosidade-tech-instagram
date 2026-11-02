@@ -80,6 +80,34 @@ class ValidarTest(unittest.TestCase):
     def test_numeros_do_roteiro(self):
         self.assertEqual(sorted(roteiro.numeros_do_roteiro(ROTEIRO)), ["1957", "508"])
 
+    def test_trechos_nao_e_lista_string(self):
+        problemas = roteiro.validar(com(lambda r: r.update(trechos="não é lista")), DIA, FATO["fato"])
+        self.assertTrue(problemas)
+
+    def test_trechos_nao_e_lista_dict(self):
+        problemas = roteiro.validar(com(lambda r: r.update(trechos={"a": 1})), DIA, FATO["fato"])
+        self.assertTrue(problemas)
+
+    def test_trecho_nao_e_objeto(self):
+        problemas = roteiro.validar(com(lambda r: r["trechos"].__setitem__(1, "não é objeto")), DIA, FATO["fato"])
+        self.assertTrue(problemas)
+
+    def test_dados_nao_e_dict(self):
+        problemas = roteiro.validar(com(lambda r: r["trechos"][0].update(dados=["a", "b"])), DIA, FATO["fato"])
+        self.assertTrue(problemas)
+
+
+class NumerosTest(unittest.TestCase):
+    def test_float_integral_vira_inteiro(self):
+        self.assertEqual(roteiro._numeros("508.0"), {"508"})
+        self.assertEqual(roteiro._numeros(508.0), {"508"})
+
+    def test_ponto_como_separador_de_milhar(self):
+        self.assertEqual(roteiro._numeros("3.000.000"), {"3000000"})
+
+    def test_virgula_decimal_nao_e_separador_de_milhar(self):
+        self.assertEqual(roteiro._numeros("3,5 bilhões"), set())
+
 
 class GerarTest(unittest.TestCase):
     def test_tenta_de_novo_e_devolve_tentativa(self):
@@ -98,6 +126,17 @@ class GerarTest(unittest.TestCase):
     def test_desiste_depois_das_tentativas(self):
         with self.assertRaises(roteiro.ErroRoteiro):
             roteiro.gerar_roteiro(FATO, "K", "m", gerar=lambda *a, **k: ("{}", {}), tentativas=2)
+
+    def test_continua_apos_resposta_malformada(self):
+        malformado = com(lambda r: r.update(destaques=5))
+        respostas = [json.dumps(malformado, ensure_ascii=False), json.dumps(ROTEIRO, ensure_ascii=False)]
+
+        def gerar(prompt, chave, modelo, busca=False, json_mode=False):
+            return respostas.pop(0), {}
+
+        r, tentativa = roteiro.gerar_roteiro(FATO, "K", "m", gerar=gerar)
+        self.assertEqual(tentativa, 2)
+        self.assertEqual(r["titulo"], ROTEIRO["titulo"])
 
 
 if __name__ == "__main__":
