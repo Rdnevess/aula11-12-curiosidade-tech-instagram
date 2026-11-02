@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Callable
 
 from scripts.diario import config, historico, trava
+from scripts.diario.gemini import ErroGemini
+from scripts.diario.pesquisa import ErroPesquisa
+
+TENTATIVAS_PESQUISA = 2
 
 
 @dataclass
@@ -143,7 +147,15 @@ def rodar(dia, sem_publicar=False, d=None):
         etapa = "pré-checagem"
         d.prechecar()
         etapa = "pesquisa"
-        fato = d.pesquisar(dia, historico.temas(hist))
+        usados = historico.temas(hist)
+        for tentativa_pesquisa in range(1, TENTATIVAS_PESQUISA + 1):
+            try:
+                fato = d.pesquisar(dia, usados)
+                break
+            except (ErroPesquisa, ErroGemini):
+                # A busca do Gemini às vezes traz outro dia, um tema repetido ou JSON quebrado: tenta mais uma vez.
+                if tentativa_pesquisa == TENTATIVAS_PESQUISA:
+                    raise
         etapa = "roteiro"
         roteiro, tentativa = d.gerar_roteiro(fato)
         pasta = config.pasta_do_dia(dia, ensaio=sem_publicar)

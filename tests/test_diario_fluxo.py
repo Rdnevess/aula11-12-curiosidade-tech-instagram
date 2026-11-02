@@ -4,6 +4,8 @@ from datetime import date
 from pathlib import Path
 
 from scripts.diario import fluxo
+from scripts.diario.gemini import ErroGemini
+from scripts.diario.pesquisa import ErroPesquisa
 
 FATO = {"titulo": "Sputnik 2", "data": "1957-11-03", "fato": "…", "numeros": [], "fontes": [
     {"dominio": "wikipedia.org", "url": "a"}, {"dominio": "nasa.gov", "url": "b"}]}
@@ -149,6 +151,39 @@ class RodarTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             fluxo.rodar(DIA, d=d)
         self.assertIn("aviso no Telegram", e["textos"][-1])
+
+    def _pesquisa_que_falha(self, d, erros):
+        chamadas = []
+
+        def pesquisar(dia, usados):
+            chamadas.append(usados)
+            if erros:
+                raise erros.pop(0)
+            return dict(FATO)
+
+        d.pesquisar = pesquisar
+        return chamadas
+
+    def test_pesquisa_tenta_de_novo_uma_vez(self):
+        d, e = deps(historico={"x": {"titulo": "Usado", "status": "manual"}})
+        chamadas = self._pesquisa_que_falha(d, [ErroPesquisa("a pesquisa trouxe outro dia")])
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(chamadas, [["Usado"], ["Usado"]])
+
+    def test_pesquisa_falha_duas_vezes_avisa(self):
+        d, e = deps()
+        chamadas = self._pesquisa_que_falha(d, [ErroGemini("vazio"), ErroPesquisa("tema já usado")])
+        with self.assertRaises(ErroPesquisa):
+            fluxo.rodar(DIA, d=d)
+        self.assertEqual(len(chamadas), 2)
+        self.assertIn("falhou em pesquisa", e["textos"][-1])
+
+    def test_pesquisa_outros_erros_nao_repetem(self):
+        d, e = deps()
+        chamadas = self._pesquisa_que_falha(d, [RuntimeError("HTTP 403")])
+        with self.assertRaises(RuntimeError):
+            fluxo.rodar(DIA, d=d)
+        self.assertEqual(len(chamadas), 1)
 
     def test_rodar_nao_apaga_o_que_verificar_gravou_durante_a_montagem(self):
         hist = {"2026-11-02": {"titulo": "Ontem", "status": "pendente", "video": "v.mp4", "legenda_post": "l"}}
