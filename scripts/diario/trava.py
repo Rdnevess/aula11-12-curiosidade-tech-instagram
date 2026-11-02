@@ -11,9 +11,9 @@ def decidir(fato, confirmacao, tentativa_roteiro, problemas_video, repetido):
     doms = dominios(fato.get("fontes") or [])
     if len(doms) < 2 or all(_e_wikipedia(d) for d in doms):
         motivos.append(f"pesquisa com poucas fontes independentes (domínios: {', '.join(sorted(doms)) or 'nenhum'})")
-    if not confirmacao.get("data_confirmada"):
+    if confirmacao.get("data_confirmada") is not True:
         motivos.append("a checagem cruzada não confirmou a data")
-    nao_confirmados = [n.get("valor") for n in (confirmacao.get("numeros") or []) if not n.get("confirmado")]
+    nao_confirmados = [n.get("valor") for n in (confirmacao.get("numeros") or []) if n.get("confirmado") is not True]
     if nao_confirmados:
         motivos.append(f"números não confirmados: {', '.join(map(str, nao_confirmados))}")
     if len(dominios(confirmacao.get("fontes") or [])) < 2:

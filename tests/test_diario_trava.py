@@ -39,6 +39,17 @@ class DecidirTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(len(motivos) > 0)
 
+    def test_confirmado_so_vale_com_booleano_true(self):
+        for valor in ("false", "true", 1, None):
+            conf = {**CONF, "numeros": [{"valor": "508", "confirmado": valor}]}
+            ok, motivos = trava.decidir(FATO, conf, 1, [], False)
+            self.assertFalse(ok, repr(valor))
+            self.assertTrue(any("508" in m for m in motivos))
+
+    def test_data_confirmada_so_vale_com_booleano_true(self):
+        for valor in ("false", "true", 1):
+            self.assertFalse(trava.decidir(FATO, {**CONF, "data_confirmada": valor}, 1, [], False)[0], repr(valor))
+
 
 if __name__ == "__main__":
     unittest.main()
