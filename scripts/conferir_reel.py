@@ -52,10 +52,10 @@ def validar_reel(dados):
     return problemas
 
 
-def validar_video(info):
+def validar_video(info, max_duracao=MAX_VIDEO):
     problemas = []
-    if info["duracao"] > MAX_VIDEO:
-        problemas.append(f"duração {info['duracao']:.2f} s passa de {MAX_VIDEO:.0f} s")
+    if info["duracao"] > max_duracao:
+        problemas.append(f"duração {info['duracao']:.2f} s passa de {max_duracao:.0f} s")
     if (info["largura"], info["altura"]) != (1080, 1920):
         problemas.append(f"resolução {info['largura']}x{info['altura']}, esperado 1080x1920")
     if round(info["fps"]) != 30:

@@ -2,6 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import scripts.publicar as publicar_mod
 
 from scripts.publicar import montar_multipart, nomes_campos, registrar
 
@@ -43,6 +46,19 @@ class PublicarTest(unittest.TestCase):
             registrar({"arquivo": "b.mp4"}, caminho)
             self.assertEqual([r["arquivo"] for r in json.loads(caminho.read_text(encoding="utf-8"))],
                              ["a.jpg", "b.mp4"])
+
+
+class PublicarArquivoTest(unittest.TestCase):
+    def test_erro_da_execucao_vira_excecao(self):
+        execucao = {"id": "9", "status": "error",
+                    "data": {"resultData": {"error": {"message": "Invalid OAuth 2.0 Access Token"}}}}
+        with mock.patch.object(publicar_mod, "buscar_workflow", return_value={"id": "w"}), \
+             mock.patch.object(publicar_mod, "ultimo_id", return_value=1), \
+             mock.patch.object(publicar_mod, "_enviar"), \
+             mock.patch.object(publicar_mod, "esperar_execucao", return_value=execucao):
+            with self.assertRaises(publicar_mod.ErroPublicacao) as ctx:
+                publicar_mod.publicar_arquivo(Path("posts/post-aula11.jpg"), "x")
+        self.assertIn("Invalid OAuth", str(ctx.exception))
 
 
 if __name__ == "__main__":

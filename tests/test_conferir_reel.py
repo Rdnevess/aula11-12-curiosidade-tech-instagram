@@ -91,6 +91,10 @@ class ValidarVideoTest(unittest.TestCase):
     def test_mais_de_20_s(self):
         self.assertTrue(validar_video({**VIDEO, "duracao": 20.4}))
 
+    def test_limite_de_duracao_configuravel(self):
+        self.assertEqual(validar_video({**VIDEO, "duracao": 29.5}, max_duracao=30.0), [])
+        self.assertTrue(validar_video({**VIDEO, "duracao": 30.2}, max_duracao=30.0))
+
     def test_resolucao_fps_codecs(self):
         self.assertTrue(validar_video({**VIDEO, "largura": 720}))
         self.assertTrue(validar_video({**VIDEO, "fps": 25.0}))

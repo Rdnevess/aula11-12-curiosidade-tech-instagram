@@ -87,25 +87,38 @@ def _enviar(caminho, legenda):
         urllib.request.urlopen(urllib.request.Request(espera, data=b"", method="POST"), timeout=30).close()
 
 
-def main(argumentos):
-    if len(argumentos) != 2:
-        sys.exit(__doc__)
-    caminho, legenda = Path(argumentos[0]), argumentos[1]
+class ErroPublicacao(Exception):
+    pass
+
+
+def publicar_arquivo(caminho, legenda):
+    caminho = Path(caminho)
     if caminho.suffix.lower() not in TIPOS_MIME or not caminho.is_file():
-        sys.exit(f"arquivo inválido: {caminho} (use .jpg, .jpeg, .mp4 ou .mov)")
+        raise ErroPublicacao(f"arquivo inválido: {caminho} (use .jpg, .jpeg, .mp4 ou .mov)")
     workflow_id = buscar_workflow(wf_post.NOME)["id"]
     antes = ultimo_id(workflow_id)
     _enviar(caminho, legenda)
     execucao = esperar_execucao(workflow_id, antes, limite_s=LIMITE_S)
     if execucao["status"] != "success":
         erro = execucao["data"]["resultData"].get("error", {})
-        sys.exit(f"execução {execucao['id']}: {execucao['status']} — {erro.get('message', 'sem mensagem')}")
+        raise ErroPublicacao(f"execução {execucao['id']}: {execucao['status']} — {erro.get('message', 'sem mensagem')}"
+                             f"{' | ' + erro['description'] if erro.get('description') else ''}")
     post = saida_json(execucao, "Link do post")
     resultado = {"arquivo": caminho.name, "tipo": saida_json(execucao, "Preparar mídia")["tipo"],
                  "permalink": post["permalink"], "execucao_id": execucao["id"],
                  "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")}
     registrar(resultado)
-    print(f"{resultado['tipo']} publicado: {resultado['permalink']} (execução {execucao['id']})")
+    return resultado
+
+
+def main(argumentos):
+    if len(argumentos) != 2:
+        sys.exit(__doc__)
+    try:
+        resultado = publicar_arquivo(Path(argumentos[0]), argumentos[1])
+    except ErroPublicacao as erro:
+        sys.exit(str(erro))
+    print(f"{resultado['tipo']} publicado: {resultado['permalink']} (execução {resultado['execucao_id']})")
 
 
 if __name__ == "__main__":
