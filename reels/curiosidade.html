@@ -184,12 +184,12 @@ const SCENES = {
       show($('#mdDate'), t, S[1], S[2] - 0.05)
       show($('#mdJp'), t, S[1] + 0.4, S[2] - 0.05)
       show($('#mdLine'), t, S[2] + 0.25, S[3] - 0.05)
-      $('#mdFill').style.width = `${easeOut(clamp((t - S[2] - 0.2) / 0.9)) * 660}px`
+      $('#mdFill').style.width = `${easeOut(clamp((t - S[2] - 0.35) / 0.9)) * 660}px`
       show($('#mdBr'), t, S[2] + D[2] * 0.5, S[3] - 0.05)
       show($('#mdNum'), t, S[3] + 0.25, S[4] - 0.1)
-      $('#mdNum').textContent = count(t, S[3] + 0.1, 1.1, 3000000).toLocaleString('pt-BR')
+      $('#mdNum').textContent = count(t, S[3] + 0.35, 1.1, 3000000).toLocaleString('pt-BR')
       show($('#mdSub'), t, S[3] + 0.5, S[4] - 0.1)
-      return [0.6, S[1] + 0.4, S[2] + D[2] * 0.5, S[3] + 1.2]
+      return [0.6, S[1] + 0.4, S[2] + D[2] * 0.5, S[3] + 1.45]
     },
   },
   // ── fim das cenas
