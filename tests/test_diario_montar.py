@@ -89,6 +89,7 @@ class MontarTest(unittest.TestCase):
         self.assertEqual(json.loads((self.pasta / "reel.json").read_text(encoding="utf-8"))["voice"]["mode"], "take")
         self.assertIn("ENV_FILE", self.comandos[0][1])
         self.assertIn("CHROME_PATH", self.comandos[1][1])
+        self.assertEqual(self.comandos[0][1]["TAKES"], "1")  # uma tomada só: poupa a cota diária do TTS
 
     def test_alinhamento_suspeito_refaz_em_segments(self):
         montar.montar(self.pasta, ROTEIRO, executar=self.executar_falso("ALINHAMENTO SUSPEITO no trecho 2"),

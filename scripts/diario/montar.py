@@ -83,7 +83,7 @@ def montar(pasta, roteiro, executar=subprocess.run, conferir=conferir_video):
     dados = reel_json(roteiro)
     arquivo = pasta / "reel.json"
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
-    env = {**os.environ, "ENV_FILE": str(RAIZ / ".env"), "CHROME_PATH": CHROME, "TAKES": "2"}
+    env = {**os.environ, "ENV_FILE": str(RAIZ / ".env"), "CHROME_PATH": CHROME, "TAKES": "1"}
     voz = pasta / "audio" / "Puck.json"
     mp4 = pasta / "out" / "diario-Puck.mp4"
     _limpar_audio(pasta)
