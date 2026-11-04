@@ -1,5 +1,6 @@
 """Cliente mínimo do Gemini (generateContent), com busca do Google opcional."""
 import json
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -8,7 +9,9 @@ URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generate
 
 
 class ErroGemini(Exception):
-    pass
+    def __init__(self, mensagem, codigo=None):
+        super().__init__(mensagem)
+        self.codigo = codigo
 
 
 def _post(url, corpo, chave, timeout=120):
@@ -18,21 +21,39 @@ def _post(url, corpo, chave, timeout=120):
         with urllib.request.urlopen(requisicao, timeout=timeout) as resposta:
             return json.loads(resposta.read())
     except urllib.error.HTTPError as erro:
-        raise ErroGemini(f"Gemini {erro.code}: {erro.read().decode('utf-8', 'replace')[:300]}") from None
+        e = ErroGemini(f"Gemini {erro.code}: {erro.read().decode('utf-8', 'replace')[:300]}", codigo=erro.code)
+        raise e from None
 
 
-def gerar(prompt, chave, modelo, busca=False, json_mode=False, post=_post):
+def gerar(prompt, chave, modelo, busca=False, json_mode=False, post=_post, esperar=time.sleep, reserva=None):
     corpo = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
     if busca:
         corpo["tools"] = [{"google_search": {}}]
     if json_mode:
         corpo["generationConfig"] = {"responseMimeType": "application/json"}
-    resposta = post(URL.format(modelo=modelo), corpo, chave)
-    candidato = (resposta.get("candidates") or [{}])[0]
-    texto = "".join(p.get("text", "") for p in candidato.get("content", {}).get("parts", []))
-    if not texto:
-        raise ErroGemini(f"resposta vazia do Gemini ({candidato.get('finishReason', 'sem motivo')})")
-    return texto, candidato.get("groundingMetadata", {})
+
+    esperas = [10, 30]  # wait times in seconds
+    modelos = [modelo]
+    if reserva:
+        modelos.append(reserva)
+
+    for i, m in enumerate(modelos):
+        tentativas = 3 if i == 0 else 1
+        for tentativa in range(tentativas):
+            try:
+                resposta = post(URL.format(modelo=m), corpo, chave)
+                candidato = (resposta.get("candidates") or [{}])[0]
+                texto = "".join(p.get("text", "") for p in candidato.get("content", {}).get("parts", []))
+                if not texto:
+                    raise ErroGemini(f"resposta vazia do Gemini ({candidato.get('finishReason', 'sem motivo')})")
+                return texto, candidato.get("groundingMetadata", {})
+            except ErroGemini as e:
+                if e.codigo not in {429, 500, 502, 503, 504}:
+                    raise
+                if i == len(modelos) - 1 and tentativa == tentativas - 1:
+                    raise
+                if tentativa < len(esperas):
+                    esperar(esperas[tentativa])
 
 
 def extrair_json(texto):

@@ -140,7 +140,7 @@ class GerarTest(unittest.TestCase):
         respostas = [json.dumps({"titulo": "x"}), json.dumps(ROTEIRO, ensure_ascii=False)]
         prompts = []
 
-        def gerar(prompt, chave, modelo, busca=False, json_mode=False):
+        def gerar(prompt, chave, modelo, busca=False, json_mode=False, **kwargs):
             prompts.append(prompt)
             return respostas.pop(0), {}
 
@@ -157,7 +157,7 @@ class GerarTest(unittest.TestCase):
         malformado = com(lambda r: r.update(destaques=5))
         respostas = [json.dumps(malformado, ensure_ascii=False), json.dumps(ROTEIRO, ensure_ascii=False)]
 
-        def gerar(prompt, chave, modelo, busca=False, json_mode=False):
+        def gerar(prompt, chave, modelo, busca=False, json_mode=False, **kwargs):
             return respostas.pop(0), {}
 
         r, tentativa = roteiro.gerar_roteiro(FATO, "K", "m", gerar=gerar)

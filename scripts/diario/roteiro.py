@@ -3,7 +3,7 @@ import re
 from datetime import date
 
 from scripts.diario import gemini
-from scripts.diario.config import MAX_PALAVRAS, selo
+from scripts.diario.config import MAX_PALAVRAS, MODELO_RESERVA, selo
 from scripts.diario.texto import ancoras
 
 ICONES = ("chip", "celular", "computador", "console", "cartucho", "globo", "satelite", "foguete", "robo",
@@ -168,7 +168,7 @@ def gerar_roteiro(fato, chave, modelo, gerar=gemini.gerar, tentativas=3):
     for tentativa in range(1, tentativas + 1):
         prompt = base if not problemas else (
             base + "\n\nProblemas da tentativa anterior (corrija todos):\n- " + "\n- ".join(problemas))
-        texto, _ = gerar(prompt, chave, modelo, json_mode=True)
+        texto, _ = gerar(prompt, chave, modelo, json_mode=True, reserva=MODELO_RESERVA)
         try:
             roteiro = gemini.extrair_json(texto)
         except gemini.ErroGemini as erro:

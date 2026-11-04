@@ -9,6 +9,7 @@ SKILL = RAIZ / "reels-video" / "scripts"
 CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe"
 HORARIO = "09:00"
 MODELO = "gemini-3.5-flash"
+MODELO_RESERVA = "gemini-3.5-flash-lite"
 MODELO_PESQUISA = "gpt-5.4-mini"
 MAX_FALA = 26.5
 MAX_VIDEO = 30.0

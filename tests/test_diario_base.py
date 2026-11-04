@@ -49,6 +49,80 @@ class GeminiTest(unittest.TestCase):
         with self.assertRaises(gemini.ErroGemini):
             gemini.gerar("p", "K", "m", post=lambda *a, **k: {"candidates": [{"finishReason": "SAFETY"}]})
 
+    def test_retry_503_then_success(self):
+        chamadas = [0]
+        esperas = []
+
+        def post(url, corpo, chave, timeout=120):
+            chamadas[0] += 1
+            if chamadas[0] == 1:
+                e = gemini.ErroGemini("Gemini 503: high demand", codigo=503)
+                raise e
+            return {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+
+        def esperar(segundos):
+            esperas.append(segundos)
+
+        texto, _ = gemini.gerar("p", "K", "m", post=post, esperar=esperar)
+        self.assertEqual(texto, "ok")
+        self.assertEqual(esperas, [10])
+
+    def test_retry_three_503s_then_reserve_success(self):
+        chamadas = [0]
+        urls = []
+        esperas = []
+
+        def post(url, corpo, chave, timeout=120):
+            urls.append(url)
+            chamadas[0] += 1
+            if chamadas[0] <= 3:
+                e = gemini.ErroGemini(f"Gemini 503: high demand", codigo=503)
+                raise e
+            return {"candidates": [{"content": {"parts": [{"text": "ok com reserva"}]}}]}
+
+        def esperar(segundos):
+            esperas.append(segundos)
+
+        texto, _ = gemini.gerar("p", "K", "gemini-3.5-flash", post=post, esperar=esperar, reserva="gemini-3.5-flash-lite")
+        self.assertEqual(texto, "ok com reserva")
+        self.assertEqual(esperas, [10, 30])
+        self.assertIn("gemini-3.5-flash-lite", urls[-1])
+
+    def test_retry_404_raises_immediately(self):
+        chamadas = [0]
+        esperas = []
+
+        def post(url, corpo, chave, timeout=120):
+            chamadas[0] += 1
+            e = gemini.ErroGemini("Gemini 404: not found", codigo=404)
+            raise e
+
+        def esperar(segundos):
+            esperas.append(segundos)
+
+        with self.assertRaises(gemini.ErroGemini) as cm:
+            gemini.gerar("p", "K", "m", post=post, esperar=esperar)
+        self.assertEqual(cm.exception.codigo, 404)
+        self.assertEqual(chamadas[0], 1)
+        self.assertEqual(esperas, [])
+
+    def test_retry_three_503s_without_reserva_raises(self):
+        chamadas = [0]
+        esperas = []
+
+        def post(url, corpo, chave, timeout=120):
+            chamadas[0] += 1
+            e = gemini.ErroGemini("Gemini 503: high demand", codigo=503)
+            raise e
+
+        def esperar(segundos):
+            esperas.append(segundos)
+
+        with self.assertRaises(gemini.ErroGemini) as cm:
+            gemini.gerar("p", "K", "m", post=post, esperar=esperar)
+        self.assertEqual(cm.exception.codigo, 503)
+        self.assertEqual(esperas, [10, 30])
+
     def test_extrair_json_com_texto_em_volta(self):
         self.assertEqual(gemini.extrair_json('Aqui: ```json\n{"a": 1}\n```'), {"a": 1})
         with self.assertRaises(gemini.ErroGemini):
