@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 import urllib.error
 from unittest import mock
@@ -36,7 +37,8 @@ class BuscarTest(unittest.TestCase):
         self.assertEqual(fontes, [{"dominio": "nasa.gov", "url": "https://www.nasa.gov/history/sputnik/russ4.html"},
                                   {"dominio": "en.wikipedia.org", "url": "https://en.wikipedia.org/wiki/Sputnik_2"}])
         corpo, chave = chamadas[0]["corpo"], chamadas[0]["chave"]
-        self.assertEqual(corpo, {"model": "gpt-5.4-mini", "tools": [{"type": "web_search"}], "input": "pergunte algo"})
+        self.assertEqual(corpo, {"model": "gpt-5.4-mini", "tools": [{"type": "web_search"}], "input": "pergunte algo",
+                                 "include": ["web_search_call.action.sources"]})
         self.assertEqual(chave, "K")
 
     def test_concatena_texto_de_varias_mensagens(self):
@@ -57,6 +59,64 @@ class BuscarTest(unittest.TestCase):
         resposta = {"output": [{"type": "message", "content": [{"type": "output_text", "text": ""}]}]}
         with self.assertRaises(openai_busca.ErroOpenAI):
             openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+
+    def test_json_only_com_fontes_listadas_e_consultadas_sao_usadas(self):
+        resposta = {"output": [
+            {"type": "web_search_call", "action": {"sources": [
+                {"type": "url", "url": "https://www.nasa.gov/history/sputnik/chronology.html"},
+                {"type": "url", "url": "https://en.wikipedia.org/wiki/Sputnik_2"},
+                {"type": "url", "url": "https://outro.exemplo.com/nao-listada"},
+            ]}},
+            {"type": "message", "content": [{"type": "output_text", "text": json.dumps({
+                "data": "1957-11-03",
+                "fontes": [
+                    "https://www.nasa.gov/history/sputnik/chronology.html/",
+                    "https://en.wikipedia.org/wiki/Sputnik_2?lang=pt",
+                    "https://nao-consultada.example.com/pagina",
+                ],
+            }, ensure_ascii=False)}]},
+        ]}
+        texto, fontes = openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+        self.assertEqual(fontes, [
+            {"dominio": "nasa.gov", "url": "https://www.nasa.gov/history/sputnik/chronology.html"},
+            {"dominio": "en.wikipedia.org", "url": "https://en.wikipedia.org/wiki/Sputnik_2"},
+        ])
+
+    def test_url_listada_mas_nao_consultada_e_ignorada(self):
+        resposta = {"output": [
+            {"type": "web_search_call", "action": {"sources": [
+                {"type": "url", "url": "https://www.nasa.gov/history/sputnik/chronology.html"},
+            ]}},
+            {"type": "message", "content": [{"type": "output_text", "text": json.dumps({
+                "fontes": ["https://nao-consultada.example.com/pagina"],
+            }, ensure_ascii=False)}]},
+        ]}
+        texto, fontes = openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+        self.assertEqual(fontes, [])
+
+    def test_sem_campo_fontes_no_json_usa_so_citacoes(self):
+        resposta = {"output": [
+            {"type": "web_search_call", "action": {"sources": [
+                {"type": "url", "url": "https://www.nasa.gov/history/sputnik/chronology.html"},
+            ]}},
+            {"type": "message", "content": [{"type": "output_text", "text": json.dumps({
+                "data": "1957-11-03",
+            }, ensure_ascii=False)}]},
+        ]}
+        texto, fontes = openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+        self.assertEqual(fontes, [])
+
+    def test_citacoes_continuam_funcionando_com_json_e_fontes(self):
+        resposta = {"output": [
+            {"type": "message", "content": [
+                {"type": "output_text", "text": json.dumps({"fontes": []}, ensure_ascii=False), "annotations": [
+                    {"type": "url_citation", "url": "https://www.nasa.gov/history/sputnik/russ4.html",
+                     "title": "NASA", "start_index": 0, "end_index": 10},
+                ]},
+            ]},
+        ]}
+        texto, fontes = openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+        self.assertEqual(fontes, [{"dominio": "nasa.gov", "url": "https://www.nasa.gov/history/sputnik/russ4.html"}])
 
 
 class PostTest(unittest.TestCase):

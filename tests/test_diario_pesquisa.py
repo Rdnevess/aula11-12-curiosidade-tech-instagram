@@ -29,7 +29,8 @@ class PesquisarTest(unittest.TestCase):
         self.assertEqual(chamadas[0]["modelo"], "m")
         self.assertIn("3 de novembro", chamadas[0]["prompt"])
         self.assertIn("Facemash", chamadas[0]["prompt"])
-        self.assertIn("fontes independentes", chamadas[0]["prompt"])
+        self.assertIn("sites independentes", chamadas[0]["prompt"])
+        self.assertIn('"fontes"', chamadas[0]["prompt"])
 
     def test_rejeita_outro_dia(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
@@ -54,7 +55,8 @@ class ConfirmarTest(unittest.TestCase):
         self.assertEqual(r["numeros"], [{"valor": "508", "confirmado": True}])
         self.assertEqual(r["fontes"], FONTES)
         self.assertIn("508", chamadas[0]["prompt"])
-        self.assertIn("fontes independentes", chamadas[0]["prompt"])
+        self.assertIn("sites independentes", chamadas[0]["prompt"])
+        self.assertIn('"fontes"', chamadas[0]["prompt"])
 
     def test_resposta_sem_campos_vira_nao_confirmado(self):
         r = pesquisa.confirmar({**FATO, "fontes": []}, ["508"], "K", "m", buscar=buscar_falso({}))

@@ -15,22 +15,24 @@ Use a busca na web. Encontre UM acontecimento de tecnologia (computação, inter
 eletrônica, exploração espacial ou ciência da computação) que ocorreu em {dia} de {mes}, em qualquer ano até {ano}.
 Prefira acontecimentos curiosos, conhecidos do público e com a data exata confirmada por mais de uma fonte.
 Não use nenhum destes temas: {usados}.
-Cite pelo menos 2 fontes independentes (sites diferentes) que confirmem a data e os números.
+Use pelo menos 2 sites independentes (domínios diferentes, de preferência fora da Wikipedia) e liste as URLs em fontes.
 Responda SOMENTE com um objeto JSON, sem texto antes ou depois:
 {{"titulo": "nome curto do acontecimento",
   "data": "AAAA-MM-DD",
   "fato": "3 a 5 frases em português com quem, o quê, onde, a data e os números exatos",
-  "numeros": ["cada número citado no fato, como aparece no texto"]}}"""
+  "numeros": ["cada número citado no fato, como aparece no texto"],
+  "fontes": ["URLs das páginas que você usou"]}}"""
 
 PROMPT_CONFIRMAR = """Use a busca na web para conferir, em fontes independentes, as afirmações abaixo.
 Acontecimento: {titulo}
 Data afirmada: {data}
 Fato: {fato}
 Números a conferir: {numeros}
-Cite pelo menos 2 fontes independentes (sites diferentes) que confirmem a data e os números.
+Use pelo menos 2 sites independentes (domínios diferentes, de preferência fora da Wikipedia) e liste as URLs em fontes.
 Responda SOMENTE com um objeto JSON:
 {{"data_confirmada": true ou false,
-  "numeros": [{{"valor": "número como foi dado", "confirmado": true ou false}}]}}"""
+  "numeros": [{{"valor": "número como foi dado", "confirmado": true ou false}}],
+  "fontes": ["URLs das páginas que você usou"]}}"""
 
 
 class ErroPesquisa(Exception):
