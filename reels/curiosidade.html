@@ -134,6 +134,20 @@ const ICONES = {
 const icone = (nome) => `<svg viewBox="0 0 200 200" width="300" height="300" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${ICONES[nome] || ICONES.chip}</svg>`
 const fmtNum = (v, alvo) => Number.isInteger(alvo) ? Math.round(v).toLocaleString('pt-BR')
   : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+// Monta string prefixo + numero + sufixo com espaços corretos
+const montarNumero = (prefixo, numero, sufixo) => {
+  let resultado = prefixo || ''
+  if (prefixo && !prefixo.endsWith(' ') && /[a-záéíóúàâãõç]$/i.test(prefixo)) {
+    resultado += ' '
+  }
+  resultado += numero
+  let suf = sufixo || ''
+  if (suf && !suf.startsWith(' ') && /^[a-záéíóúàâãõç]/i.test(suf)) {
+    suf = ' ' + suf
+  }
+  resultado += suf
+  return resultado
+}
 // Encolhe font-size em passos até o texto caber em maxW. Mede com scrollWidth (imune a transform/
 // rotação) alternando white-space:nowrap só durante a medição, p/ pegar a largura "natural" do texto
 // mesmo em caixas esticadas (left:0;right:0) ou que terão wrap no render. Em caixas com left:0;right:0
@@ -182,11 +196,11 @@ const BLOCOS = {
     // centralizado em 1080 deixa a borda direita em x=920 sempre, não só no valor final.
     fit(d, i) {
       const el = $(`#b${i}n`)
-      el.textContent = `${d.prefixo || ''}${fmtNum(d.valor, d.valor)}${d.sufixo || ''}`
+      el.textContent = montarNumero(d.prefixo, fmtNum(d.valor, d.valor), d.sufixo)
       fit(el, 760, 130, 40)
     },
     anim(t, tIn, d, i) {
-      $(`#b${i}n`).textContent = `${d.prefixo || ''}${fmtNum(easeOut(clamp((t - tIn - 0.1) / 1.1)) * d.valor, d.valor)}${d.sufixo || ''}`
+      $(`#b${i}n`).textContent = montarNumero(d.prefixo, fmtNum(easeOut(clamp((t - tIn - 0.1) / 1.1)) * d.valor, d.valor), d.sufixo)
       return tIn + 1.2
     },
   },
