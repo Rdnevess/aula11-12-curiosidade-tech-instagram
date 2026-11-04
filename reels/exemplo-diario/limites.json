@@ -11,7 +11,7 @@
     "name": "limites", "stage": "../curiosidade.html", "out": "out/{name}.mp4", "build": "build",
     "fps": 30, "width": 1080, "height": 1920, "lead": 0.25, "cover": "S1+1.0", "pops": true,
     "data": {
-      "scene": "auto", "selo": "03 NOV", "highlight": ["Sputnik", "Laika", "508"],
+      "scene": "auto", "selo": "03 NOV", "capa": "WWWW Primeiro Computador Pessoal Vendido", "highlight": ["Sputnik", "Laika", "508"],
       "endAfterLast": true, "endHold": 2.5,
       "trechos": [
         {"bloco": "gancho", "dados": {"icone": "satelite", "carimbo": "WWWWWWWWWWWW"}},

@@ -19,6 +19,26 @@ class ErroMontagem(Exception):
     pass
 
 
+MAX_CAPA = 40
+
+
+def titulo_capa(titulo, limite=MAX_CAPA):
+    """Título curto para a capa (1º quadro): corta na última palavra inteira e põe "…"."""
+    titulo = " ".join(str(titulo or "").split())
+    if len(titulo) <= limite:
+        return titulo
+    corte = titulo[:limite - 1]
+    if " " in corte:
+        corte = corte.rsplit(" ", 1)[0]
+    return corte.rstrip(" ,.:;—–-") + "…"
+
+
+def _data_capa(data_iso):
+    """"1957-11-03" -> "03/11/1957"; vazio se a data não vier no formato esperado."""
+    partes = str(data_iso or "").split("-")
+    return "/".join(reversed(partes)) if len(partes) == 3 else ""
+
+
 def reel_json(roteiro):
     falas = [t["fala"] for t in roteiro["trechos"]]
     return {
@@ -29,6 +49,7 @@ def reel_json(roteiro):
         "render": {"name": "diario", "stage": "../curiosidade.html", "out": "out/{name}.mp4", "build": "build",
                    "fps": 30, "width": 1080, "height": 1920, "lead": 0.25, "cover": "S1+1.0", "pops": True,
                    "data": {"scene": "auto", "selo": roteiro["selo"], "highlight": roteiro["destaques"],
+                            "capa": titulo_capa(roteiro.get("titulo")), "capaData": _data_capa(roteiro.get("data")),
                             "endAfterLast": True, "endHold": END_HOLD,
                             "trechos": [{"bloco": t["bloco"], "dados": t["dados"]} for t in roteiro["trechos"]]}},
     }

@@ -31,6 +31,15 @@ html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--b
 .bar{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:2px solid var(--line);font:500 26px var(--mono);color:var(--muted)}
 .bar i{width:18px;height:18px;border-radius:50%;background:var(--line);display:inline-block}
 .alert{color:var(--alert)}
+/* capa (cena auto): o Instagram usa o 1º quadro na grade do perfil, que corta o 9:16 para ~3:4
+   (y 240–1680). Tudo o que importa fica em y 420–1500 e x 90–990. */
+#capa{position:absolute;inset:0;z-index:12;background:var(--bg)}
+#capaSelo{position:absolute;left:0;right:0;top:500px;text-align:center}
+#capaSelo span{display:inline-block;font:800 30px var(--mono);letter-spacing:3px;color:var(--brand);border:2px solid var(--brand);border-radius:12px;padding:12px 22px;background:rgba(57,255,136,.06);white-space:nowrap}
+#capaIco{left:400px;top:610px;width:280px;height:280px;display:grid;place-items:center;color:var(--muted)}
+#capaIco svg{width:210px;height:210px}
+#capaData{left:0;right:0;top:930px;text-align:center;font:800 150px var(--mono);letter-spacing:-5px;color:var(--brand);white-space:nowrap}
+#capaTit{left:90px;width:900px;top:1140px;text-align:center;font-weight:900;font-size:100px;line-height:1.04;letter-spacing:-2px;overflow-wrap:anywhere}
 /* cartão final */
 #end{position:absolute;inset:0;background:var(--bg);z-index:15}
 #endAt{position:absolute;left:0;right:0;top:960px;text-align:center;font:800 66px var(--mono);color:var(--brand);letter-spacing:-1px}
@@ -85,21 +94,22 @@ const blink = (t, hz = 3) => Math.floor(t * hz * 2) % 2 === 0
 const panel = (id, style, inner) => `<div class="abs panel" id="${id}" style="${style}">${inner}</div>`
 
 // ── fundo: grade sutil ─────────────────────────────────────────────────────
-function grid() {
+function gridLines() {
   let h = ''
   for (let x = 0; x <= 1080; x += 60) h += `<line x1="${x}" y1="0" x2="${x}" y2="1920" stroke="#39FF88" stroke-opacity="0.045"/>`
   for (let y = 0; y <= 1920; y += 60) h += `<line x1="0" y1="${y}" x2="1080" y2="${y}" stroke="#39FF88" stroke-opacity="0.045"/>`
-  $('#grid').innerHTML = h
+  return h
 }
+function grid() { $('#grid').innerHTML = gridLines() }
 
 // ── legenda palavra a palavra (segue o tempo do trecho) ────────────────────
 let HI = /^$/, capKey = ''
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-function caption(t, S, D, lines, hideFrom = Infinity) {
+function caption(t, S, D, lines, hideFrom = Infinity, showFrom = 0) {
   let i = -1
   for (let k = 0; k < lines.length; k++) if (t >= S[k] - 0.05) i = k
   const p = $('#cap p')
-  if (i < 0 || t >= hideFrom) { p.innerHTML = ''; capKey = ''; return }
+  if (i < 0 || t >= hideFrom || t < showFrom) { p.innerHTML = ''; capKey = ''; return }
   const words = lines[i].split(' ')
   if (capKey !== String(i)) {
     p.innerHTML = words.map((w) => `<span class="w${HI.test(w.replace(/[…?!.,:;]/g, '')) ? ' hi' : ''}">${w}</span>`).join('')
@@ -174,6 +184,23 @@ function fit(el, maxW, maxFont, minFont = 24, step = 2) {
   el.style.maxWidth = prevMaxWidth
   return size
 }
+// Encolhe font-size até o texto (com quebra de linha) caber em maxLines linhas. Também uma vez só, em afterBuild.
+// Cada palavra num <span> sem quebra: "MS-DOS" não parte no hífen. Recebe texto já escapado com h().
+const palavras = (html) => html.split(' ').filter(Boolean).map((w) => `<span style="white-space:nowrap">${w}</span>`).join(' ')
+function fitLines(el, maxLines, maxFont, minFont = 40, step = 2) {
+  if (!el) return maxFont
+  let size = maxFont
+  // +0,5 linha de folga: com line-height < 1,2 o scrollHeight inclui o que as letras passam da linha.
+  // Largura também: as palavras vêm em <span> sem quebra (palavras), então uma palavra longa demais transborda.
+  const cabe = () => el.scrollHeight <= (maxLines + 0.5) * parseFloat(getComputedStyle(el).lineHeight)
+    && el.scrollWidth <= el.clientWidth + 1
+  el.style.fontSize = `${size}px`
+  while (size > minFont && !cabe()) {
+    size -= step
+    el.style.fontSize = `${size}px`
+  }
+  return size
+}
 // Cada bloco ocupa a faixa da cena (y 880–1500): html(d, i) e anim(t, tIn, d, i) → tempo de pop extra ou null.
 const BLOCOS = {
   gancho: {
@@ -234,6 +261,9 @@ const BLOCOS = {
     anim: () => null,
   },
 }
+
+// Capa da cena auto: opaca de 0 a CAPA_ATE s, depois some em CAPA_FADE s.
+const CAPA_ATE = 0.45, CAPA_FADE = 0.25
 
 // ── cenas ──────────────────────────────────────────────────────────────────
 // build(d) devolve o HTML; frame(t, S, D, d) posiciona tudo e devolve os tempos dos "pops".
@@ -347,18 +377,39 @@ const SCENES = {
   },
   // Curiosidade diária: um bloco do catálogo por trecho (data.trechos[i] = {bloco, dados}).
   // Cada bloco entra 0,25 s depois do início do trecho (o anterior termina de sumir) e sai antes do próximo.
+  // Capa: cartão opaco desde o quadro 0 (sem fade-in) — o Instagram usa o 1º quadro na grade do perfil.
+  // Fica até CAPA_ATE, some em CAPA_FADE s; o gancho entra em CAPA_ATE e a legenda só depois da capa sumir.
+  // A voz não muda (começa no lead, por baixo da capa).
   auto: {
-    build: (d) => d.trechos.map((tr, i) =>
-      `<div class="abs" id="b${i}" style="left:0;right:0;top:880px;height:620px">${BLOCOS[tr.bloco].html(tr.dados, i)}</div>`).join(''),
+    build: (d) => {
+      const gancho = d.trechos.find((tr) => tr.bloco === 'gancho')
+      const data = d.capaData || (d.trechos.find((tr) => tr.bloco === 'data') || { dados: {} }).dados.texto || ''
+      const capa = `<div id="capa">
+          <svg width="1080" height="1920" style="position:absolute;inset:0">${gridLines()}</svg>
+          <div id="capaSelo"><span id="capaSeloTxt">HOJE NA HISTÓRIA DA TECH · ${h(d.selo)}</span></div>
+          <div class="abs panel" id="capaIco">${icone(gancho ? gancho.dados.icone : 'chip')}</div>
+          <div class="abs" id="capaData">${h(data)}</div>
+          <div class="abs" id="capaTit">${palavras(h(d.capa))}</div>
+        </div>`
+      return capa + d.trechos.map((tr, i) =>
+        `<div class="abs" id="b${i}" style="left:0;right:0;top:880px;height:620px">${BLOCOS[tr.bloco].html(tr.dados, i)}</div>`).join('')
+    },
     // Ajustes de tamanho de texto (fit) uma única vez, com os elementos já no DOM e sem transform
     // aplicado ainda — nunca dentro de frame()/anim(), senão rodaria 30x por segundo.
     afterBuild(d) {
+      fit($('#capaSeloTxt'), 856, 30, 18, 1)
+      fit($('#capaData'), 900, 150, 60)
+      fitLines($('#capaTit'), 2, 100, 44)
       d.trechos.forEach((tr, i) => BLOCOS[tr.bloco].fit?.(tr.dados, i))
     },
+    captionFrom: CAPA_ATE + CAPA_FADE,
     frame(t, S, D, d) {
       const eventos = []
+      const capa = $('#capa'), oc = 1 - clamp((t - CAPA_ATE) / CAPA_FADE)
+      capa.style.opacity = String(oc)
+      capa.style.visibility = oc > 0 ? 'visible' : 'hidden'
       d.trechos.forEach((tr, i) => {
-        const tIn = i === 0 ? 0 : S[i] + 0.25
+        const tIn = i === 0 ? CAPA_ATE : S[i] + 0.25
         const tOut = i + 1 < S.length ? S[i + 1] - 0.05 : Infinity
         show($(`#b${i}`), t, tIn, tOut, { dy: 60 })
         const extra = BLOCOS[tr.bloco].anim(t, tIn, tr.dados, i)
@@ -390,7 +441,7 @@ window.setup = function ({ S, D, lines, data, voiceEnd }) {
 window.render = function (t) {
   const { S, D, lines, data, sc, outroAt } = window.TL
   const events = sc.frame(t, S, D, data) || []
-  caption(t, S, D, lines, outroAt)
+  caption(t, S, D, lines, outroAt, sc.captionFrom ?? 0)
   show($('#selo'), t, 0, outroAt, { dy: -20, back: false })
   const pe = clamp((t - outroAt) / 0.35), end = $('#end')
   end.style.opacity = String(pe)

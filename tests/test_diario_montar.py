@@ -39,6 +39,32 @@ class ReelJsonTest(unittest.TestCase):
         self.assertEqual(d["trechos"][2], {"bloco": "numero", "dados": ROTEIRO["trechos"][2]["dados"]})
 
 
+class CapaTest(unittest.TestCase):
+    """Capa do Reel: o Instagram usa o 1º quadro na grade do perfil."""
+
+    def test_capa_com_titulo_e_data_do_evento(self):
+        d = montar.reel_json(ROTEIRO)["render"]["data"]
+        self.assertEqual(d["capa"], "Sputnik 2")
+        self.assertEqual(d["capaData"], "03/11/1957")
+
+    def test_titulo_longo_e_cortado_com_reticencias(self):
+        titulo = "O Primeiro Computador Pessoal Vendido em Larga Escala no Mundo"
+        capa = montar.reel_json({**ROTEIRO, "titulo": titulo})["render"]["data"]["capa"]
+        self.assertLessEqual(len(capa), 40)
+        self.assertTrue(capa.endswith("…"))
+        self.assertTrue(titulo.startswith(capa[:-1].rstrip()))
+        self.assertNotIn(" …", capa)
+        self.assertEqual(capa, "O Primeiro Computador Pessoal Vendido…")
+
+    def test_titulo_de_40_caracteres_fica_inteiro(self):
+        titulo = "x" * 40
+        self.assertEqual(montar.reel_json({**ROTEIRO, "titulo": titulo})["render"]["data"]["capa"], titulo)
+
+    def test_template_escapa_a_capa(self):
+        html = (Path(montar.__file__).resolve().parents[2] / "reels" / "curiosidade.html").read_text(encoding="utf-8")
+        self.assertTrue("h(d.capa)" in html and 'id="capa"' in html)
+
+
 class MontarTest(unittest.TestCase):
     def setUp(self):
         self.pasta = Path(tempfile.mkdtemp()) / "diario-2026-11-03"
