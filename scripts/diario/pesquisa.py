@@ -4,7 +4,7 @@ import re
 from datetime import date
 
 from scripts.diario import gemini, openai_busca
-from scripts.diario.historico import normalizar_titulo
+from scripts.diario import historico
 
 NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
                "outubro", "novembro", "dezembro"]
@@ -18,7 +18,9 @@ Missões espaciais só valem quando o fato é sobre a tecnologia em si (um compu
 um sistema de comunicação, uma inovação de engenharia); nesse caso o roteiro deve focar na tecnologia, não na missão.
 Prefira acontecimentos curiosos, conhecidos do público e com a data exata confirmada por mais de uma fonte.
 Não use nenhum destes temas: {usados}.
-Use pelo menos 2 sites independentes (domínios diferentes, de preferência fora da Wikipedia) e liste as URLs em fontes.
+Não repita nenhum desses acontecimentos, nem o mesmo acontecimento com outro nome ou outro ângulo.
+Nomes proibidos (o acontecimento escolhido não pode envolver nenhum deles): {nomes}.
+{rejeitados}Use pelo menos 2 sites independentes (domínios diferentes, de preferência fora da Wikipedia) e liste as URLs em fontes.
 Responda SOMENTE com um objeto JSON, sem texto antes ou depois:
 {{"titulo": "nome curto do acontecimento",
   "data": "AAAA-MM-DD",
@@ -38,13 +40,28 @@ Responda SOMENTE com um objeto JSON:
   "fontes": ["URLs das páginas que você usou"]}}"""
 
 
+REJEITADOS = ("Nas tentativas anteriores você sugeriu {titulos}: esse acontecimento já foi publicado. "
+              "Escolha OUTRO acontecimento, sem relação com ele.\n")
+
+
 class ErroPesquisa(Exception):
     pass
 
 
-def pesquisar(dia, usados, chave, modelo, buscar=openai_busca.buscar):
+class TemaRepetido(ErroPesquisa):
+    """A pesquisa trouxe um acontecimento já usado; titulo vai como exclusão explícita na próxima tentativa."""
+
+    def __init__(self, mensagem, titulo):
+        super().__init__(mensagem)
+        self.titulo = titulo
+
+
+def pesquisar(dia, hist, chave, modelo, buscar=openai_busca.buscar, rejeitados=()):
+    """hist = dicionário do histórico (historico.carregar); rejeitados = títulos recusados nas tentativas anteriores."""
+    extra = REJEITADOS.format(titulos="; ".join(f'"{t}"' for t in rejeitados)) if rejeitados else ""
     prompt = PROMPT.format(dia=dia.day, mes=NOMES_MESES[dia.month - 1], ano=dia.year,
-                           usados="; ".join(usados) or "nenhum")
+                           usados="; ".join(historico.temas_com_data(hist)) or "nenhum", rejeitados=extra,
+                           nomes=", ".join(historico.nomes_usados(hist, rejeitados)) or "nenhum")
     texto, fontes = buscar(prompt, chave, modelo)
     fato = gemini.extrair_json(texto)
     faltando = [c for c in CAMPOS if not fato.get(c)]
@@ -56,8 +73,9 @@ def pesquisar(dia, usados, chave, modelo, buscar=openai_busca.buscar):
         raise ErroPesquisa(f"data inválida na pesquisa: {fato['data']}") from None
     if (data.month, data.day) != (dia.month, dia.day) or data.year > dia.year:
         raise ErroPesquisa(f"a pesquisa trouxe outro dia: {fato['data']}")
-    if normalizar_titulo(fato["titulo"]) in {normalizar_titulo(u) for u in usados}:
-        raise ErroPesquisa(f"tema já usado: {fato['titulo']}")
+    motivo = historico.ja_usado(hist, fato["titulo"], fato["data"])
+    if motivo:
+        raise TemaRepetido(f"tema já usado: {fato['titulo']} ({motivo})", fato["titulo"])
     fato["fontes"] = fontes
     return fato
 

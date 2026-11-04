@@ -3,10 +3,10 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from scripts.diario import fluxo
+from scripts.diario import fluxo, historico
 from scripts.diario.gemini import ErroGemini
 from scripts.diario.openai_busca import ErroOpenAI
-from scripts.diario.pesquisa import ErroPesquisa
+from scripts.diario.pesquisa import ErroPesquisa, TemaRepetido
 
 FATO = {"titulo": "Sputnik 2", "data": "1957-11-03", "fato": "…", "numeros": [], "fontes": [
     {"dominio": "wikipedia.org", "url": "a"}, {"dominio": "nasa.gov", "url": "b"}]}
@@ -32,7 +32,7 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA)
         historico_carregar=lambda: copy.deepcopy(estado["hist"]),
         historico_atualizar=atualizar,
         prechecar=lambda: None,
-        pesquisar=lambda dia, usados: dict(FATO),
+        pesquisar=lambda dia, hist, rejeitados: dict(FATO),
         gerar_roteiro=lambda fato: (ROTEIRO, 1),
         montar=lambda pasta, roteiro: (Path("out.mp4"), []),
         confirmar=lambda fato, numeros: conf,
@@ -155,9 +155,11 @@ class RodarTest(unittest.TestCase):
 
     def _pesquisa_que_falha(self, d, erros):
         chamadas = []
+        self.rejeitados_vistos = []
 
-        def pesquisar(dia, usados):
-            chamadas.append(usados)
+        def pesquisar(dia, hist, rejeitados):
+            chamadas.append(historico.temas(hist))
+            self.rejeitados_vistos.append(list(rejeitados))
             if erros:
                 raise erros.pop(0)
             return dict(FATO)
@@ -171,19 +173,67 @@ class RodarTest(unittest.TestCase):
         self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
         self.assertEqual(chamadas, [["Usado"], ["Usado"]])
 
-    def test_pesquisa_falha_duas_vezes_avisa(self):
+    def test_pesquisa_falha_tres_vezes_avisa(self):
         d, e = deps()
-        chamadas = self._pesquisa_que_falha(d, [ErroGemini("vazio"), ErroPesquisa("tema já usado")])
+        chamadas = self._pesquisa_que_falha(d, [ErroGemini("vazio"), ErroPesquisa("outro dia"),
+                                                ErroPesquisa("tema já usado")])
         with self.assertRaises(ErroPesquisa):
             fluxo.rodar(DIA, d=d)
-        self.assertEqual(len(chamadas), 2)
+        self.assertEqual(len(chamadas), 3)
         self.assertIn("falhou em pesquisa", e["textos"][-1])
+
+    def test_tema_repetido_seguido_de_outro_dia_ainda_tenta_a_terceira(self):
+        # Ensaio real de 04/11: 1ª tentativa repetiu o UNIVAC, a 2ª trouxe outro dia; com 2 tentativas o dia ficava sem post.
+        d, e = deps()
+        chamadas = self._pesquisa_que_falha(d, [TemaRepetido("x", "UNIVAC acerta"), ErroPesquisa("outro dia")])
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(len(chamadas), 3)
+        self.assertEqual(self.rejeitados_vistos[-1], ["UNIVAC acerta"])
 
     def test_pesquisa_erro_openai_tenta_de_novo_uma_vez(self):
         d, e = deps(historico={"x": {"titulo": "Usado", "status": "manual"}})
         chamadas = self._pesquisa_que_falha(d, [ErroOpenAI("OpenAI 429: rate limit")])
         self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
         self.assertEqual(chamadas, [["Usado"], ["Usado"]])
+
+    def test_tema_repetido_tenta_tres_vezes_e_passa_o_rejeitado(self):
+        d, e = deps()
+        chamadas = self._pesquisa_que_falha(d, [TemaRepetido("tema já usado: A", "A"),
+                                                TemaRepetido("tema já usado: B", "B")])
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(len(chamadas), 3)
+        self.assertEqual(self.rejeitados_vistos, [[], ["A"], ["A", "B"]])
+
+    def test_tema_repetido_tres_vezes_avisa(self):
+        d, e = deps()
+        chamadas = self._pesquisa_que_falha(d, [TemaRepetido("x", "A"), TemaRepetido("x", "B"),
+                                                TemaRepetido("tema já usado: C", "C")])
+        with self.assertRaises(TemaRepetido):
+            fluxo.rodar(DIA, d=d)
+        self.assertEqual(len(chamadas), 3)
+        self.assertIn("falhou em pesquisa", e["textos"][-1])
+
+    def test_historico_guarda_titulo_da_pesquisa_e_data_do_evento(self):
+        d, e = deps()
+        d.gerar_roteiro = lambda fato: ({**ROTEIRO, "titulo": "O Cão no Espaço"}, 1)
+        fluxo.rodar(DIA, d=d)
+        registro = e["hist"]["2026-11-03#1"]
+        self.assertEqual(registro["titulo"], "O Cão no Espaço")
+        self.assertEqual(registro["titulo_pesquisa"], "Sputnik 2")
+        self.assertEqual(registro["data_evento"], "1957-11-03")
+
+    def test_pendente_tambem_guarda_titulo_da_pesquisa_e_data(self):
+        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        fluxo.rodar(DIA, d=d)
+        self.assertEqual(e["hist"]["2026-11-03#1"]["data_evento"], "1957-11-03")
+        self.assertEqual(e["hist"]["2026-11-03#1"]["titulo_pesquisa"], "Sputnik 2")
+
+    def test_trava_segura_mesmo_acontecimento_com_outro_titulo(self):
+        # Caso real (UNIVAC): a pesquisa falsa não filtra; a trava precisa pegar pela data do evento.
+        d, e = deps(historico={"2026-11-03#1": {"titulo": "Outro nome", "titulo_pesquisa": "Cadela no espaço",
+                                                "data_evento": "1957-11-03", "status": "publicado"}})
+        self.assertEqual(fluxo.rodar(DIA, slot=2, d=d), "pendente")
+        self.assertTrue(any("tema já publicado antes" in m for m in e["hist"]["2026-11-03#2"]["motivos"]))
 
     def test_pesquisa_outros_erros_nao_repetem(self):
         d, e = deps()
@@ -240,7 +290,7 @@ class SlotsRodarTest(unittest.TestCase):
         d, e = deps(historico={"2026-11-03#1": {"titulo": "Tema da manhã", "status": "publicado"},
                                "manual-x": {"titulo": "Semente", "status": "manual"}})
         vistos = []
-        d.pesquisar = lambda dia, usados: (vistos.append(list(usados)), dict(FATO))[1]
+        d.pesquisar = lambda dia, hist, rejeitados: (vistos.append(historico.temas(hist)), dict(FATO))[1]
         fluxo.rodar(DIA, slot=2, d=d)
         self.assertIn("Tema da manhã", vistos[0])
         self.assertIn("Semente", vistos[0])

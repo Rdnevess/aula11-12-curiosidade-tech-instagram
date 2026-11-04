@@ -8,9 +8,11 @@ from typing import Callable
 from scripts.diario import config, historico, trava
 from scripts.diario.gemini import ErroGemini
 from scripts.diario.openai_busca import ErroOpenAI
-from scripts.diario.pesquisa import ErroPesquisa
+from scripts.diario.pesquisa import ErroPesquisa, TemaRepetido
 
-TENTATIVAS_PESQUISA = 2
+# Até 3 tentativas de pesquisa para qualquer recusa (tema repetido, outro dia, JSON quebrado, falha da API).
+# Cada título recusado por tema repetido vai como exclusão explícita no prompt seguinte.
+TENTATIVAS_PESQUISA = 3
 
 
 @dataclass
@@ -58,7 +60,8 @@ class Dependencias:
             historico_carregar=historico.carregar,
             historico_atualizar=historico.atualizar,
             prechecar=prechecar,
-            pesquisar=lambda dia, usados: pesquisa.pesquisar(dia, usados, k["OPENAI_API_KEY"], config.MODELO_PESQUISA),
+            pesquisar=lambda dia, hist, rejeitados: pesquisa.pesquisar(dia, hist, k["OPENAI_API_KEY"],
+                                                                       config.MODELO_PESQUISA, rejeitados=rejeitados),
             gerar_roteiro=lambda fato: roteiro.gerar_roteiro(fato, k["GEMINI_API_KEY"], config.MODELO),
             montar=montar.montar,
             confirmar=lambda fato, numeros: pesquisa.confirmar(fato, numeros, k["OPENAI_API_KEY"],
@@ -156,14 +159,21 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
         d.prechecar()
         etapa = "pesquisa"
         # Temas de todo o histórico, inclusive o outro slot do mesmo dia: os dois posts nunca repetem assunto.
-        usados = historico.temas(hist)
-        for tentativa_pesquisa in range(1, TENTATIVAS_PESQUISA + 1):
+        rejeitados = []
+        tentativa_pesquisa = 0
+        while True:
+            tentativa_pesquisa += 1
             try:
-                fato = d.pesquisar(dia, usados)
+                fato = d.pesquisar(dia, hist, list(rejeitados))
                 break
+            except TemaRepetido as erro:
+                # O modelo às vezes ignora a lista de temas usados: tenta de novo citando o título recusado.
+                rejeitados.append(erro.titulo)
+                if tentativa_pesquisa >= TENTATIVAS_PESQUISA:
+                    raise
             except (ErroPesquisa, ErroGemini, ErroOpenAI):
-                # A busca da OpenAI às vezes traz outro dia, um tema repetido, JSON quebrado ou falha da API: tenta mais uma vez.
-                if tentativa_pesquisa == TENTATIVAS_PESQUISA:
+                # A busca da OpenAI às vezes traz outro dia, JSON quebrado ou falha da API: tenta mais uma vez.
+                if tentativa_pesquisa >= TENTATIVAS_PESQUISA:
                     raise
         etapa = "roteiro"
         roteiro, tentativa = d.gerar_roteiro(fato)
@@ -175,12 +185,15 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
         etapa = "checagem cruzada"
         confirmacao = d.confirmar(fato, numeros_do_roteiro(roteiro))
         d.salvar_json(pasta, "checagem.json", confirmacao)
-        ok, motivos = trava.decidir(fato, confirmacao, tentativa, problemas, historico.repetido(hist, roteiro["titulo"]))
+        repetido = (historico.ja_usado(hist, fato["titulo"], fato.get("data"))
+                    or historico.ja_usado(hist, roteiro["titulo"]))
+        ok, motivos = trava.decidir(fato, confirmacao, tentativa, problemas, repetido)
         if sem_publicar:
             d.avisar_texto(f"🧪 ensaio {chave}{_rotulo(chave)}: {roteiro['titulo']} — "
                            f"{'publicaria sozinho' if ok else 'seguraria: ' + '; '.join(motivos)}")
             return "ensaio"
-        base = {"titulo": roteiro["titulo"], "fontes": fato.get("fontes", []), "video": str(mp4),
+        base = {"titulo": roteiro["titulo"], "titulo_pesquisa": fato["titulo"], "data_evento": fato.get("data"),
+                "fontes": fato.get("fontes", []), "video": str(mp4),
                 "legenda_post": roteiro["legenda_post"], "pasta": str(pasta)}
         if ok:
             etapa = "publicação"

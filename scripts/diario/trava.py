@@ -52,5 +52,5 @@ def decidir(fato, confirmacao, tentativa_roteiro, problemas_video, repetido):
         motivos.append(f"roteiro só ficou válido na tentativa {tentativa_roteiro}")
     motivos += [f"vídeo: {p}" for p in (problemas_video or [])]
     if repetido:
-        motivos.append("tema já publicado antes")
+        motivos.append("tema já publicado antes" + (f" ({repetido})" if isinstance(repetido, str) else ""))
     return not motivos, motivos

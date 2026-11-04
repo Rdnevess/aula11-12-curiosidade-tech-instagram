@@ -21,7 +21,7 @@ def buscar_falso(resposta, fontes=FONTES, registro=None):
 class PesquisarTest(unittest.TestCase):
     def test_devolve_fato_com_fontes_da_busca(self):
         chamadas = []
-        fato = pesquisa.pesquisar(date(2026, 11, 3), ["Facemash"], "K", "m",
+        fato = pesquisa.pesquisar(date(2026, 11, 3), {"m": {"titulo": "Facemash"}}, "K", "m",
                                   buscar=buscar_falso(FATO, registro=chamadas))
         self.assertEqual(fato["titulo"], "Lançamento do Sputnik 2")
         self.assertEqual(fato["fontes"], FONTES)
@@ -47,15 +47,15 @@ class PesquisarTest(unittest.TestCase):
 
     def test_rejeita_outro_dia(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
-            pesquisa.pesquisar(date(2026, 11, 4), [], "K", "m", buscar=buscar_falso(FATO))
+            pesquisa.pesquisar(date(2026, 11, 4), {}, "K", "m", buscar=buscar_falso(FATO))
 
     def test_rejeita_tema_usado(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
-            pesquisa.pesquisar(date(2026, 11, 3), ["lancamento do sputnik 2"], "K", "m", buscar=buscar_falso(FATO))
+            pesquisa.pesquisar(date(2026, 11, 3), {"x": {"titulo": "lancamento do sputnik 2"}}, "K", "m", buscar=buscar_falso(FATO))
 
     def test_rejeita_campo_faltando(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
-            pesquisa.pesquisar(date(2026, 11, 3), [], "K", "m", buscar=buscar_falso({"titulo": "x"}))
+            pesquisa.pesquisar(date(2026, 11, 3), {}, "K", "m", buscar=buscar_falso({"titulo": "x"}))
 
 
 class ConfirmarTest(unittest.TestCase):
