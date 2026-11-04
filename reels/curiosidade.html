@@ -136,12 +136,19 @@ const fmtNum = (v, alvo) => Number.isInteger(alvo) ? Math.round(v).toLocaleStrin
   : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
 // Encolhe font-size em passos até o texto caber em maxW. Mede com scrollWidth (imune a transform/
 // rotação) alternando white-space:nowrap só durante a medição, p/ pegar a largura "natural" do texto
-// mesmo em caixas esticadas (left:0;right:0) ou que terão wrap no render. Chamada uma única vez por
-// bloco em afterBuild (nunca por quadro — senão a fonte "pulsaria" a cada frame).
+// mesmo em caixas esticadas (left:0;right:0) ou que terão wrap no render. Em caixas com left:0;right:0
+// e width:auto (ex.: .num/.date/.sub) o width computado fica travado na largura do quadro (1080px),
+// então scrollWidth nunca reflete o texto — por isso width/max-width também são forçados para
+// max-content/none só durante a medição (left:0 permanece a âncora; right é que cede). Chamada uma
+// única vez por bloco em afterBuild (nunca por quadro — senão a fonte "pulsaria" a cada frame).
 function fit(el, maxW, maxFont, minFont = 24, step = 2) {
   if (!el) return maxFont
   const prevWS = el.style.whiteSpace
+  const prevWidth = el.style.width
+  const prevMaxWidth = el.style.maxWidth
   el.style.whiteSpace = 'nowrap'
+  el.style.width = 'max-content'
+  el.style.maxWidth = 'none'
   let size = maxFont
   el.style.fontSize = `${size}px`
   while (size > minFont && el.scrollWidth > maxW) {
@@ -149,6 +156,8 @@ function fit(el, maxW, maxFont, minFont = 24, step = 2) {
     el.style.fontSize = `${size}px`
   }
   el.style.whiteSpace = prevWS
+  el.style.width = prevWidth
+  el.style.maxWidth = prevMaxWidth
   return size
 }
 // Cada bloco ocupa a faixa da cena (y 880–1500): html(d, i) e anim(t, tIn, d, i) → tempo de pop extra ou null.
