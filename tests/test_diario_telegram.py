@@ -21,8 +21,13 @@ class Gravador:
 
 class TelegramTest(unittest.TestCase):
     def test_teclado(self):
-        botoes = telegram.teclado("2026-11-03")["inline_keyboard"][0]
-        self.assertEqual([b["callback_data"] for b in botoes], ["pub:2026-11-03", "desc:2026-11-03"])
+        botoes = telegram.teclado("2026-11-03#2")["inline_keyboard"][0]
+        self.assertEqual([b["callback_data"] for b in botoes], ["pub:2026-11-03#2", "desc:2026-11-03#2"])
+        self.assertTrue(all(len(b["callback_data"].encode()) <= 64 for b in botoes))
+
+    def test_texto_pendente_cita_o_horario_do_slot(self):
+        texto = telegram.texto_pendente(ROTEIRO, FATO, ["m"], horario="11h")
+        self.assertIn("11h", texto.splitlines()[0])
 
     def test_texto_pendente_limita_tamanho(self):
         texto = telegram.texto_pendente(ROTEIRO, FATO, ["motivo " * 300])
@@ -32,25 +37,35 @@ class TelegramTest(unittest.TestCase):
 
     def test_enviar_video_com_botoes(self):
         g = Gravador({})
-        telegram.enviar_video("T", "42", Path("posts/post-aula11.jpg"), "legenda", "2026-11-03", chamar=g)
+        telegram.enviar_video("T", "42", Path("posts/post-aula11.jpg"), "legenda", "2026-11-03#1", chamar=g)
         c = g.chamadas[0]
         self.assertEqual(c["metodo"], "sendVideo")
         self.assertEqual(c["campos"]["chat_id"], "42")
-        self.assertEqual(json.loads(c["campos"]["reply_markup"])["inline_keyboard"][0][0]["callback_data"], "pub:2026-11-03")
+        self.assertEqual(json.loads(c["campos"]["reply_markup"])["inline_keyboard"][0][0]["callback_data"], "pub:2026-11-03#1")
         self.assertEqual(c["arquivo"][0], "video")
 
     def test_ler_cliques_filtra_chat_e_formato(self):
         updates = [
-            {"update_id": 10, "callback_query": {"id": "a", "data": "pub:2026-11-03",
+            {"update_id": 10, "callback_query": {"id": "a", "data": "pub:2026-11-03#2",
                                                  "message": {"message_id": 7, "chat": {"id": 42}}}},
-            {"update_id": 11, "callback_query": {"id": "b", "data": "pub:2026-11-03", "message": {"chat": {"id": 99}}}},
+            {"update_id": 11, "callback_query": {"id": "b", "data": "pub:2026-11-03#1", "message": {"chat": {"id": 99}}}},
             {"update_id": 12, "callback_query": {"id": "c", "data": "lixo", "message": {"chat": {"id": 42}}}},
             {"update_id": 13, "message": {"chat": {"id": 42}, "text": "oi"}},
+            {"update_id": 14, "callback_query": {"id": "d", "data": "desc:2026-11-03#1",
+                                                 "message": {"message_id": 8, "chat": {"id": 42}}}},
+            {"update_id": 15, "callback_query": {"id": "e", "data": "pub:2026-11-03#3", "message": {"chat": {"id": 42}}}},
+            {"update_id": 16, "callback_query": {"id": "f", "data": "pub:2026-11-03#", "message": {"chat": {"id": 42}}}},
+            {"update_id": 17, "callback_query": {"id": "g", "data": "pub:2026-11-03#1x", "message": {"chat": {"id": 42}}}},
+            {"update_id": 18, "callback_query": {"id": "h", "data": "pub:2026-11-03",
+                                                 "message": {"message_id": 9, "chat": {"id": 42}}}},
         ]
         g = Gravador(updates)
         cliques, offset = telegram.ler_cliques("T", "42", 5, chamar=g)
-        self.assertEqual(cliques, [{"acao": "pub", "dia": "2026-11-03", "id": "a", "message_id": 7}])
-        self.assertEqual(offset, 14)
+        self.assertEqual(cliques, [{"acao": "pub", "chave": "2026-11-03#2", "id": "a", "message_id": 7},
+                                   {"acao": "desc", "chave": "2026-11-03#1", "id": "d", "message_id": 8},
+                                   # botões antigos (de antes dos slots) continuam valendo para a chave legada
+                                   {"acao": "pub", "chave": "2026-11-03", "id": "h", "message_id": 9}])
+        self.assertEqual(offset, 19)
         self.assertEqual(g.chamadas[0]["campos"]["offset"], 5)
 
     def test_remover_botoes(self):

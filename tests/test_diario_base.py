@@ -17,7 +17,14 @@ GROUNDING = {"groundingChunks": [
 class ConfigTest(unittest.TestCase):
     def test_selo_e_pasta(self):
         self.assertEqual(config.selo(date(1994, 10, 30)), "30 OUT")
-        self.assertEqual(config.pasta_do_dia(date(2026, 11, 3)).name, "diario-2026-11-03")
+        self.assertEqual(config.pasta_do_dia(date(2026, 11, 3), 1).name, "diario-2026-11-03-1")
+        self.assertEqual(config.pasta_do_dia(date(2026, 11, 3), 2, ensaio=True).name, "diario-2026-11-03-2-ensaio")
+
+    def test_horarios_dos_slots(self):
+        self.assertEqual(config.HORARIOS, {1: "09:00", 2: "11:00"})
+        self.assertFalse(hasattr(config, "HORARIO"))
+        self.assertEqual(config.hora_curta(1), "09h")
+        self.assertEqual(config.hora_curta(2), "11h")
 
 
 class GeminiTest(unittest.TestCase):
@@ -133,6 +140,31 @@ class GeminiTest(unittest.TestCase):
         self.assertEqual(len(fontes), 2)
         self.assertEqual(gemini.dominios(fontes), {"en.wikipedia.org", "computerhistory.org"})
         self.assertEqual(gemini.normalizar_dominio("https://www.Exemplo.com/a"), "exemplo.com")
+
+
+class ChaveTest(unittest.TestCase):
+    def test_chave_por_slot(self):
+        self.assertEqual(historico.chave(date(2026, 11, 4), 1), "2026-11-04#1")
+        self.assertEqual(historico.chave("2026-11-04", 2), "2026-11-04#2")
+
+    def test_separar_chave_nova_e_legadas(self):
+        self.assertEqual(historico.separar("2026-11-04#2"), (date(2026, 11, 4), 2))
+        self.assertEqual(historico.separar("2026-11-03"), (date(2026, 11, 3), None))
+        self.assertEqual(historico.separar("manual-pentium"), (None, None))
+        self.assertEqual(historico.separar("2026-11-04#x"), (None, None))
+        self.assertEqual(historico.separar("2026-13-40#1"), (None, None))
+
+    def test_slots_do_mesmo_dia_sao_independentes(self):
+        dados = {"2026-11-04#1": {"titulo": "A", "status": "publicado"}}
+        self.assertTrue(historico.ja_resolvido(dados, "2026-11-04#1"))
+        self.assertFalse(historico.ja_resolvido(dados, "2026-11-04#2"))
+
+    def test_chave_legada_do_dia_conta_como_slot_1(self):
+        # Antes dos slots, o dia tinha uma só chave: o post desse dia é o do slot 1.
+        dados = {"2026-11-03": {"titulo": "Mariner 10", "status": "publicado"}}
+        self.assertTrue(historico.ja_resolvido(dados, "2026-11-03#1"))
+        self.assertFalse(historico.ja_resolvido(dados, "2026-11-03#2"))
+        self.assertIn("Mariner 10", historico.temas(dados))
 
 
 class HistoricoTest(unittest.TestCase):

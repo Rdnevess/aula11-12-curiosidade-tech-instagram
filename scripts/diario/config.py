@@ -7,7 +7,8 @@ OFFSET = PASTA_DADOS / "telegram-offset.txt"
 PASTA_REELS = RAIZ / "reels"
 SKILL = RAIZ / "reels-video" / "scripts"
 CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe"
-HORARIO = "09:00"
+# Dois posts por dia (horário local, America/Cuiaba): slot -> hora da tarefa agendada.
+HORARIOS = {1: "09:00", 2: "11:00"}
 MODELO = "gemini-3.5-flash"
 MODELO_RESERVA = "gemini-3.5-flash-lite"
 MODELO_PESQUISA = "gpt-5.4-mini"
@@ -24,9 +25,14 @@ def chaves():
     return {nome: env.get(nome, "") for nome in NOMES_CHAVES}
 
 
-def pasta_do_dia(dia, ensaio=False):
-    # O ensaio (--sem-publicar) usa pasta própria: nunca sobrescreve o vídeo real do dia.
-    return PASTA_REELS / f"diario-{dia.isoformat()}{'-ensaio' if ensaio else ''}"
+def hora_curta(slot):
+    """"09:00" -> "09h", para as mensagens do Telegram."""
+    return f"{HORARIOS[slot][:2]}h"
+
+
+def pasta_do_dia(dia, slot, ensaio=False):
+    # Uma pasta por slot; o ensaio (--sem-publicar) usa pasta própria: nunca sobrescreve o vídeo real.
+    return PASTA_REELS / f"diario-{dia.isoformat()}-{slot}{'-ensaio' if ensaio else ''}"
 
 
 def selo(dia):

@@ -1,4 +1,8 @@
-"""Histórico da curiosidade diária: um registro por dia de execução (AAAA-MM-DD)."""
+"""Histórico da curiosidade diária: um registro por post, com a chave "AAAA-MM-DD#<slot>".
+
+Chaves antigas continuam valendo: "AAAA-MM-DD" (de antes dos dois posts por dia, equivale ao slot 1)
+e as da semente ("manual-*"), que só servem para não repetir temas.
+"""
 import copy
 import json
 import os
@@ -6,6 +10,7 @@ import re
 import tempfile
 import time
 import unicodedata
+from datetime import date
 from pathlib import Path
 
 from scripts.diario.config import HISTORICO
@@ -17,6 +22,24 @@ SEMENTE = {
 }
 # "publicando" e "erro_publicacao": o post pode já estar no ar; nunca repetir a publicação sozinho.
 RESOLVIDOS = {"publicado", "pendente", "publicando", "erro_publicacao"}
+CHAVE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:#(\d+))?$")
+
+
+def chave(dia, slot):
+    """Chave do post: "2026-11-04#1". dia pode ser date ou "AAAA-MM-DD"."""
+    return f"{dia.isoformat() if isinstance(dia, date) else dia}#{slot}"
+
+
+def separar(chave_post):
+    """"2026-11-04#2" -> (date, 2); legado "2026-11-03" -> (date, None); qualquer outra -> (None, None)."""
+    achado = CHAVE.match(chave_post or "")
+    if not achado:
+        return None, None
+    try:
+        dia = date.fromisoformat(achado.group(1))
+    except ValueError:
+        return None, None
+    return dia, int(achado.group(2)) if achado.group(2) else None
 
 
 def carregar(caminho=HISTORICO):
@@ -47,25 +70,29 @@ def salvar(dados, caminho=HISTORICO):
             os.remove(temporario)
 
 
-def atualizar(dia_iso, campos, caminho=HISTORICO):
-    """Relê o arquivo, muda só o registro de dia_iso e grava.
+def atualizar(chave_post, campos, caminho=HISTORICO):
+    """Relê o arquivo, muda só o registro de chave_post e grava.
 
     rodar (demorado) e verificar (a cada 10 min) podem rodar ao mesmo tempo: gravar o dicionário
     inteiro carregado no início apagaria o que o outro comando gravou nesse meio-tempo.
     """
     dados = carregar(caminho)
-    registro = registrar(dados, dia_iso, campos)
+    registro = registrar(dados, chave_post, campos)
     salvar(dados, caminho)
     return registro
 
 
-def registrar(dados, dia_iso, campos):
-    dados.setdefault(dia_iso, {}).update(campos)
-    return dados[dia_iso]
+def registrar(dados, chave_post, campos):
+    dados.setdefault(chave_post, {}).update(campos)
+    return dados[chave_post]
 
 
-def ja_resolvido(dados, dia_iso):
-    return dados.get(dia_iso, {}).get("status") in RESOLVIDOS
+def ja_resolvido(dados, chave_post):
+    if dados.get(chave_post, {}).get("status") in RESOLVIDOS:
+        return True
+    # O registro legado "AAAA-MM-DD" é o post da manhã daquele dia: bloqueia o slot 1.
+    dia, slot = separar(chave_post)
+    return slot == 1 and dados.get(dia.isoformat(), {}).get("status") in RESOLVIDOS
 
 
 def temas(dados):

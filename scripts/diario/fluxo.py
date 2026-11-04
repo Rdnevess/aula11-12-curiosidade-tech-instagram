@@ -65,7 +65,7 @@ class Dependencias:
                                                                config.MODELO_PESQUISA),
             publicar=publicar_arquivo,
             avisar_texto=lambda texto: telegram.enviar_texto(token, chat, texto),
-            avisar_video=lambda mp4, legenda, dia_iso: telegram.enviar_video(token, chat, mp4, legenda, dia_iso),
+            avisar_video=lambda mp4, legenda, chave: telegram.enviar_video(token, chat, mp4, legenda, chave),
             ler_cliques=lambda offset: telegram.ler_cliques(token, chat, offset),
             responder=lambda cid, texto: telegram.responder(token, cid, texto),
             remover_botoes=lambda message_id: telegram.remover_botoes(token, chat, message_id),
@@ -109,37 +109,43 @@ def texto_erro_publicacao(titulo, erro):
     return texto
 
 
-def _publicar(d, dia_iso, titulo, video, legenda, campos=None, rodape=""):
+def _rotulo(chave):
+    """" (09h)" para a chave de um slot; vazio para chaves antigas, sem slot."""
+    _, slot = historico.separar(chave)
+    return f" ({config.hora_curta(slot)})" if slot in config.HORARIOS else ""
+
+
+def _publicar(d, chave, titulo, video, legenda, campos=None, rodape=""):
     """Publica com o histórico sempre à frente: "publicando" antes, "publicado"/"erro_publicacao" depois.
 
     Uma exceção depois do envio (tempo esgotado, link ausente...) não prova que o post não foi ao ar,
-    por isso o dia fica "erro_publicacao": não é publicado de novo sozinho nem por um novo clique.
+    por isso a chave fica "erro_publicacao": não é publicado de novo sozinho nem por um novo clique.
     Devolve (resultado, None) ou (None, erro) — o erro já foi avisado no Telegram.
     """
-    d.historico_atualizar(dia_iso, {**(campos or {}), "status": "publicando"})
+    d.historico_atualizar(chave, {**(campos or {}), "status": "publicando"})
     try:
         resultado = d.publicar(video, legenda)
     except Exception as erro:
-        _tentar(d.historico_atualizar, dia_iso, {"status": "erro_publicacao", "erro": str(erro)[:500]})
+        _tentar(d.historico_atualizar, chave, {"status": "erro_publicacao", "erro": str(erro)[:500]})
         _tentar(d.avisar_texto, texto_erro_publicacao(titulo, erro))
         return None, erro
     # Publicação já aconteceu: uma falha daqui em diante não pode parecer falha de publicação.
     try:
-        d.historico_atualizar(dia_iso, {"status": "publicado", "permalink": resultado["permalink"],
+        d.historico_atualizar(chave, {"status": "publicado", "permalink": resultado["permalink"],
                                         "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
     except Exception as erro_pos:
         _tentar(d.avisar_texto, _aviso_pos_publicacao(resultado["permalink"], erro_pos))
         return resultado, None
-    _tentar(d.avisar_texto, f"✅ Publicado: {titulo}\n{resultado['permalink']}{rodape}")
+    _tentar(d.avisar_texto, f"✅ Publicado{_rotulo(chave)}: {titulo}\n{resultado['permalink']}{rodape}")
     return resultado, None
 
 
-def rodar(dia, sem_publicar=False, d=None):
+def rodar(dia, slot=1, sem_publicar=False, d=None):
     from scripts.diario.roteiro import numeros_do_roteiro
     from scripts.diario.telegram import texto_pendente
 
     d = d or Dependencias.reais()
-    chave = dia.isoformat()
+    chave = historico.chave(dia, slot)
     etapa = "histórico"
     avisado = False
     try:
@@ -149,6 +155,7 @@ def rodar(dia, sem_publicar=False, d=None):
         etapa = "pré-checagem"
         d.prechecar()
         etapa = "pesquisa"
+        # Temas de todo o histórico, inclusive o outro slot do mesmo dia: os dois posts nunca repetem assunto.
         usados = historico.temas(hist)
         for tentativa_pesquisa in range(1, TENTATIVAS_PESQUISA + 1):
             try:
@@ -160,7 +167,7 @@ def rodar(dia, sem_publicar=False, d=None):
                     raise
         etapa = "roteiro"
         roteiro, tentativa = d.gerar_roteiro(fato)
-        pasta = config.pasta_do_dia(dia, ensaio=sem_publicar)
+        pasta = config.pasta_do_dia(dia, slot, ensaio=sem_publicar)
         d.salvar_json(pasta, "pesquisa.json", fato)
         d.salvar_json(pasta, "roteiro.json", roteiro)
         etapa = "vídeo"
@@ -170,7 +177,7 @@ def rodar(dia, sem_publicar=False, d=None):
         d.salvar_json(pasta, "checagem.json", confirmacao)
         ok, motivos = trava.decidir(fato, confirmacao, tentativa, problemas, historico.repetido(hist, roteiro["titulo"]))
         if sem_publicar:
-            d.avisar_texto(f"🧪 ensaio {chave}: {roteiro['titulo']} — "
+            d.avisar_texto(f"🧪 ensaio {chave}{_rotulo(chave)}: {roteiro['titulo']} — "
                            f"{'publicaria sozinho' if ok else 'seguraria: ' + '; '.join(motivos)}")
             return "ensaio"
         base = {"titulo": roteiro["titulo"], "fontes": fato.get("fontes", []), "video": str(mp4),
@@ -186,7 +193,7 @@ def rodar(dia, sem_publicar=False, d=None):
         etapa = "histórico"
         d.historico_atualizar(chave, {**base, "status": "pendente", "motivos": motivos})
         etapa = "aviso no Telegram"
-        d.avisar_video(mp4, texto_pendente(roteiro, fato, motivos), chave)
+        d.avisar_video(mp4, texto_pendente(roteiro, fato, motivos, config.hora_curta(slot)), chave)
         return "pendente"
     except Exception as erro:
         if not avisado:
@@ -195,25 +202,28 @@ def rodar(dia, sem_publicar=False, d=None):
 
 
 def _tratar_clique(d, clique):
-    dia_iso = clique["dia"]
+    chave = clique["chave"]
     # Relido a cada clique: rodar pode ter gravado algo, e um clique anterior do mesmo lote também.
-    registro = d.historico_carregar().get(dia_iso)
+    registro = d.historico_carregar().get(chave)
     if not registro or registro.get("status") != "pendente":
-        _tentar(d.responder, clique["id"], "Esse dia já resolvido: nada a fazer.")
+        _tentar(d.responder, clique["id"], "Esse post já resolvido: nada a fazer.")
         return
     if clique["acao"] == "desc":
-        d.historico_atualizar(dia_iso, {"status": "descartado"})
+        d.historico_atualizar(chave, {"status": "descartado"})
         _tentar(d.responder, clique["id"], "Descartado.")
-        _tentar(d.avisar_texto, f"🗑 Descartado: {registro.get('titulo', dia_iso)}")
+        _tentar(d.avisar_texto, f"🗑 Descartado{_rotulo(chave)}: {registro.get('titulo', chave)}")
         return
-    if dia_iso != d.hoje().isoformat():
+    dia, _ = historico.separar(chave)
+    if dia != d.hoje():
         # O vídeo diz "hoje" e traz o selo do dia: publicá-lo em outro dia estaria errado.
-        d.historico_atualizar(dia_iso, {"status": "expirado"})
+        # Chave sem data legível: na dúvida, não publica.
+        d.historico_atualizar(chave, {"status": "expirado"})
         _tentar(d.responder, clique["id"], "Expirou.")
-        _tentar(d.avisar_texto, f"⌛ expirou: o vídeo era para {dia_iso[8:10]}/{dia_iso[5:7]} "
+        quando = dia.strftime("%d/%m") if dia else chave
+        _tentar(d.avisar_texto, f"⌛ expirou: o vídeo era para {quando}{_rotulo(chave)} "
                                 f"({registro.get('titulo', '')}); não foi publicado.")
         return
-    _, erro = _publicar(d, dia_iso, registro["titulo"], Path(registro["video"]), registro["legenda_post"])
+    _, erro = _publicar(d, chave, registro["titulo"], Path(registro["video"]), registro["legenda_post"])
     _tentar(d.responder, clique["id"], "Falhou; veja a mensagem." if erro else "Publicado!")
 
 
@@ -225,7 +235,7 @@ def verificar(d=None):
             try:
                 _tratar_clique(d, clique)
             except Exception as erro:
-                _tentar(d.avisar_texto, mensagem_erro(f"clique {clique['acao']} de {clique['dia']}", erro))
+                _tentar(d.avisar_texto, mensagem_erro(f"clique {clique['acao']} de {clique['chave']}", erro))
             if clique.get("message_id") is not None:
                 # Melhor esforço: com polling a cada 10 min, o Telegram pode recusar mexer em cliques antigos.
                 _tentar(d.remover_botoes, clique["message_id"])

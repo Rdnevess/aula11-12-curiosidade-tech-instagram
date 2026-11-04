@@ -10,7 +10,8 @@ from pathlib import Path
 from scripts.publicar import montar_multipart
 
 API = "https://api.telegram.org/bot{token}/{metodo}"
-CLIQUE = re.compile(r"^(pub|desc):(\d{4}-\d{2}-\d{2})$")
+# "pub:2026-11-04#1" (slot 1 ou 2); sem "#slot" é botão antigo, de antes dos dois posts por dia.
+CLIQUE = re.compile(r"^(pub|desc):(\d{4}-\d{2}-\d{2}(?:#[12])?)$")
 LIMITE_LEGENDA = 1024
 
 
@@ -44,17 +45,19 @@ def chamar(token, metodo, campos=None, arquivo=None, post=_post):
     return post(token, metodo, campos, arquivo)
 
 
-def teclado(dia_iso):
-    return {"inline_keyboard": [[{"text": "✅ Publicar", "callback_data": f"pub:{dia_iso}"},
-                                 {"text": "🗑 Descartar", "callback_data": f"desc:{dia_iso}"}]]}
+def teclado(chave):
+    # callback_data tem limite de 64 bytes no Telegram; "desc:AAAA-MM-DD#2" usa 17.
+    return {"inline_keyboard": [[{"text": "✅ Publicar", "callback_data": f"pub:{chave}"},
+                                 {"text": "🗑 Descartar", "callback_data": f"desc:{chave}"}]]}
 
 
-def texto_pendente(roteiro, fato, motivos):
+def texto_pendente(roteiro, fato, motivos, horario=""):
     fontes = "\n".join(f"• {f['dominio']}" for f in fato.get("fontes", [])[:5]) or "• nenhuma"
     falas = " ".join(t["fala"] for t in roteiro["trechos"])
 
     # Construir cabeçalho e rodapé para preservá-los
-    header = f"⏸ Aguardando aprovação: {roteiro['titulo']} ({fato.get('data', '')})\n\n"
+    post = f" (post das {horario})" if horario else ""
+    header = f"⏸ Aguardando aprovação{post}: {roteiro['titulo']} ({fato.get('data', '')})\n\n"
     footer = f"\n\nFontes:\n{fontes}\n\nRoteiro: {falas}"
 
     # Calcular quanto espaço está disponível para motivos
@@ -88,10 +91,10 @@ def enviar_texto(token, chat, texto, chamar=chamar):
     return chamar(token, "sendMessage", {"chat_id": chat, "text": texto[:4096], "disable_web_page_preview": "true"})
 
 
-def enviar_video(token, chat, caminho, legenda, dia_iso=None, chamar=chamar):
+def enviar_video(token, chat, caminho, legenda, chave=None, chamar=chamar):
     campos = {"chat_id": chat, "caption": legenda[:LIMITE_LEGENDA], "supports_streaming": "true"}
-    if dia_iso:
-        campos["reply_markup"] = json.dumps(teclado(dia_iso))
+    if chave:
+        campos["reply_markup"] = json.dumps(teclado(chave))
     caminho = Path(caminho)
     if not caminho.exists():
         raise ErroTelegram(f"vídeo não encontrado: {caminho.name}")
@@ -110,7 +113,7 @@ def ler_cliques(token, chat, offset, chamar=chamar):
             continue
         achado = CLIQUE.match(cq.get("data") or "")
         if achado:
-            cliques.append({"acao": achado.group(1), "dia": achado.group(2), "id": cq["id"],
+            cliques.append({"acao": achado.group(1), "chave": achado.group(2), "id": cq["id"],
                             "message_id": cq["message"].get("message_id")})
     return cliques, novo
 

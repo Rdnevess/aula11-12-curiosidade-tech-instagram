@@ -136,8 +136,8 @@ class PastaDoDiaTest(unittest.TestCase):
         from datetime import date
         from scripts.diario import config
         dia = date(2026, 11, 3)
-        self.assertEqual(config.pasta_do_dia(dia).name, "diario-2026-11-03")
-        self.assertEqual(config.pasta_do_dia(dia, ensaio=True).name, "diario-2026-11-03-ensaio")
+        self.assertEqual(config.pasta_do_dia(dia, 1).name, "diario-2026-11-03-1")
+        self.assertEqual(config.pasta_do_dia(dia, 1, ensaio=True).name, "diario-2026-11-03-1-ensaio")
 
 
 if __name__ == "__main__":
