@@ -7,6 +7,7 @@ from typing import Callable
 
 from scripts.diario import config, historico, trava
 from scripts.diario.gemini import ErroGemini
+from scripts.diario.openai_busca import ErroOpenAI
 from scripts.diario.pesquisa import ErroPesquisa
 
 TENTATIVAS_PESQUISA = 2
@@ -57,10 +58,11 @@ class Dependencias:
             historico_carregar=historico.carregar,
             historico_atualizar=historico.atualizar,
             prechecar=prechecar,
-            pesquisar=lambda dia, usados: pesquisa.pesquisar(dia, usados, k["GEMINI_API_KEY"], config.MODELO),
+            pesquisar=lambda dia, usados: pesquisa.pesquisar(dia, usados, k["OPENAI_API_KEY"], config.MODELO_PESQUISA),
             gerar_roteiro=lambda fato: roteiro.gerar_roteiro(fato, k["GEMINI_API_KEY"], config.MODELO),
             montar=montar.montar,
-            confirmar=lambda fato, numeros: pesquisa.confirmar(fato, numeros, k["GEMINI_API_KEY"], config.MODELO),
+            confirmar=lambda fato, numeros: pesquisa.confirmar(fato, numeros, k["OPENAI_API_KEY"],
+                                                               config.MODELO_PESQUISA),
             publicar=publicar_arquivo,
             avisar_texto=lambda texto: telegram.enviar_texto(token, chat, texto),
             avisar_video=lambda mp4, legenda, dia_iso: telegram.enviar_video(token, chat, mp4, legenda, dia_iso),
@@ -152,8 +154,8 @@ def rodar(dia, sem_publicar=False, d=None):
             try:
                 fato = d.pesquisar(dia, usados)
                 break
-            except (ErroPesquisa, ErroGemini):
-                # A busca do Gemini às vezes traz outro dia, um tema repetido ou JSON quebrado: tenta mais uma vez.
+            except (ErroPesquisa, ErroGemini, ErroOpenAI):
+                # A busca da OpenAI às vezes traz outro dia, um tema repetido, JSON quebrado ou falha da API: tenta mais uma vez.
                 if tentativa_pesquisa == TENTATIVAS_PESQUISA:
                     raise
         etapa = "roteiro"

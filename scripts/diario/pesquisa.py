@@ -1,9 +1,9 @@
-"""Pesquisa da curiosidade do dia e checagem cruzada, com a busca do Google pelo Gemini."""
+"""Pesquisa da curiosidade do dia e checagem cruzada, com a busca na web da OpenAI."""
 import json
 import re
 from datetime import date
 
-from scripts.diario import gemini
+from scripts.diario import gemini, openai_busca
 from scripts.diario.historico import normalizar_titulo
 
 NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
@@ -11,21 +11,23 @@ NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 CAMPOS = ("titulo", "data", "fato", "numeros")
 
 PROMPT = """Você pesquisa história da tecnologia para um perfil de Instagram em português do Brasil.
-Use a busca do Google. Encontre UM acontecimento de tecnologia (computação, internet, games, telecomunicações,
+Use a busca na web. Encontre UM acontecimento de tecnologia (computação, internet, games, telecomunicações,
 eletrônica, exploração espacial ou ciência da computação) que ocorreu em {dia} de {mes}, em qualquer ano até {ano}.
 Prefira acontecimentos curiosos, conhecidos do público e com a data exata confirmada por mais de uma fonte.
 Não use nenhum destes temas: {usados}.
+Cite pelo menos 2 fontes independentes (sites diferentes) que confirmem a data e os números.
 Responda SOMENTE com um objeto JSON, sem texto antes ou depois:
 {{"titulo": "nome curto do acontecimento",
   "data": "AAAA-MM-DD",
   "fato": "3 a 5 frases em português com quem, o quê, onde, a data e os números exatos",
   "numeros": ["cada número citado no fato, como aparece no texto"]}}"""
 
-PROMPT_CONFIRMAR = """Use a busca do Google para conferir, em fontes independentes, as afirmações abaixo.
+PROMPT_CONFIRMAR = """Use a busca na web para conferir, em fontes independentes, as afirmações abaixo.
 Acontecimento: {titulo}
 Data afirmada: {data}
 Fato: {fato}
 Números a conferir: {numeros}
+Cite pelo menos 2 fontes independentes (sites diferentes) que confirmem a data e os números.
 Responda SOMENTE com um objeto JSON:
 {{"data_confirmada": true ou false,
   "numeros": [{{"valor": "número como foi dado", "confirmado": true ou false}}]}}"""
@@ -35,10 +37,10 @@ class ErroPesquisa(Exception):
     pass
 
 
-def pesquisar(dia, usados, chave, modelo, gerar=gemini.gerar):
+def pesquisar(dia, usados, chave, modelo, buscar=openai_busca.buscar):
     prompt = PROMPT.format(dia=dia.day, mes=NOMES_MESES[dia.month - 1], ano=dia.year,
                            usados="; ".join(usados) or "nenhum")
-    texto, meta = gerar(prompt, chave, modelo, busca=True)
+    texto, fontes = buscar(prompt, chave, modelo)
     fato = gemini.extrair_json(texto)
     faltando = [c for c in CAMPOS if not fato.get(c)]
     if faltando:
@@ -51,14 +53,14 @@ def pesquisar(dia, usados, chave, modelo, gerar=gemini.gerar):
         raise ErroPesquisa(f"a pesquisa trouxe outro dia: {fato['data']}")
     if normalizar_titulo(fato["titulo"]) in {normalizar_titulo(u) for u in usados}:
         raise ErroPesquisa(f"tema já usado: {fato['titulo']}")
-    fato["fontes"] = gemini.fontes_de(meta)
+    fato["fontes"] = fontes
     return fato
 
 
-def confirmar(fato, numeros, chave, modelo, gerar=gemini.gerar):
+def confirmar(fato, numeros, chave, modelo, buscar=openai_busca.buscar):
     prompt = PROMPT_CONFIRMAR.format(titulo=fato["titulo"], data=fato["data"], fato=fato["fato"],
                                      numeros=json.dumps(numeros, ensure_ascii=False))
-    texto, meta = gerar(prompt, chave, modelo, busca=True)
+    texto, fontes = buscar(prompt, chave, modelo)
     resposta = gemini.extrair_json(texto)
     numeros_resposta = [n for n in resposta.get("numeros", []) if isinstance(n, dict)]
 
@@ -72,4 +74,4 @@ def confirmar(fato, numeros, chave, modelo, gerar=gemini.gerar):
 
     return {"data_confirmada": resposta.get("data_confirmada") is True,
             "numeros": numeros_final,
-            "fontes": gemini.fontes_de(meta)}
+            "fontes": fontes}

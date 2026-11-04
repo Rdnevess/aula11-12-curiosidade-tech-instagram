@@ -5,6 +5,7 @@ from pathlib import Path
 
 from scripts.diario import fluxo
 from scripts.diario.gemini import ErroGemini
+from scripts.diario.openai_busca import ErroOpenAI
 from scripts.diario.pesquisa import ErroPesquisa
 
 FATO = {"titulo": "Sputnik 2", "data": "1957-11-03", "fato": "…", "numeros": [], "fontes": [
@@ -177,6 +178,12 @@ class RodarTest(unittest.TestCase):
             fluxo.rodar(DIA, d=d)
         self.assertEqual(len(chamadas), 2)
         self.assertIn("falhou em pesquisa", e["textos"][-1])
+
+    def test_pesquisa_erro_openai_tenta_de_novo_uma_vez(self):
+        d, e = deps(historico={"x": {"titulo": "Usado", "status": "manual"}})
+        chamadas = self._pesquisa_que_falha(d, [ErroOpenAI("OpenAI 429: rate limit")])
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(chamadas, [["Usado"], ["Usado"]])
 
     def test_pesquisa_outros_erros_nao_repetem(self):
         d, e = deps()
