@@ -11,8 +11,11 @@ NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 CAMPOS = ("titulo", "data", "fato", "numeros")
 
 PROMPT = """Você pesquisa história da tecnologia para um perfil de Instagram em português do Brasil.
-Use a busca na web. Encontre UM acontecimento de tecnologia (computação, internet, games, telecomunicações,
-eletrônica, exploração espacial ou ciência da computação) que ocorreu em {dia} de {mes}, em qualquer ano até {ano}.
+Use a busca na web. Encontre UM acontecimento de TECNOLOGIA E COMPUTAÇÃO que ocorreu em {dia} de {mes},
+em qualquer ano até {ano}: hardware, software, computadores, internet, games, inteligência artificial,
+telecomunicações, eletrônica, programação, empresas e produtos de tecnologia.
+Missões espaciais só valem quando o fato é sobre a tecnologia em si (um computador de bordo, um chip, um software,
+um sistema de comunicação, uma inovação de engenharia); nesse caso o roteiro deve focar na tecnologia, não na missão.
 Prefira acontecimentos curiosos, conhecidos do público e com a data exata confirmada por mais de uma fonte.
 Não use nenhum destes temas: {usados}.
 Use pelo menos 2 sites independentes (domínios diferentes, de preferência fora da Wikipedia) e liste as URLs em fontes.

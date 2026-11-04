@@ -32,6 +32,19 @@ class PesquisarTest(unittest.TestCase):
         self.assertIn("sites independentes", chamadas[0]["prompt"])
         self.assertIn('"fontes"', chamadas[0]["prompt"])
 
+    def test_prompt_foca_em_tecnologia_e_computacao(self):
+        prompt = pesquisa.PROMPT
+        self.assertIn("TECNOLOGIA E COMPUTAÇÃO", prompt)
+        for tema in ("hardware", "software", "computadores", "internet", "games", "inteligência artificial",
+                     "telecomunicações", "eletrônica", "programação", "empresas e produtos de tecnologia"):
+            self.assertIn(tema, prompt)
+        self.assertIn("Missões espaciais só valem quando o fato é sobre a tecnologia em si", prompt)
+        self.assertIn("computador de bordo", prompt)
+        self.assertIn("o roteiro deve focar na tecnologia", prompt)
+        self.assertNotIn("exploração espacial ou ciência da computação", prompt)
+        self.assertIn('"fontes"', prompt)
+        self.assertIn("sites independentes", prompt)
+
     def test_rejeita_outro_dia(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
             pesquisa.pesquisar(date(2026, 11, 4), [], "K", "m", buscar=buscar_falso(FATO))
