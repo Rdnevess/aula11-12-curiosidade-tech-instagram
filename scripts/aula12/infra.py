@@ -124,6 +124,20 @@ def compose_atualizado(texto_atual, dominio, pasta_diario):
     return texto
 
 
+def definir_env(caminho, chave, valor):
+    """Grava CHAVE=valor no .env (substitui a linha se existir, senão acrescenta), sem mexer nas outras."""
+    caminho = Path(caminho)
+    linhas = caminho.read_text(encoding="utf-8").splitlines() if caminho.exists() else []
+    nova = f"{chave}={valor}"
+    for i, linha in enumerate(linhas):
+        if linha.split("=", 1)[0].strip() == chave:
+            linhas[i] = nova
+            break
+    else:
+        linhas.append(nova)
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+
 def diff_compose(atual, proposto):
     """Diff unificado (texto), para mostrar ao usuário no portão da Task 4."""
     return "".join(
@@ -137,7 +151,21 @@ def diff_compose(atual, proposto):
 
 
 if __name__ == "__main__":
+    import subprocess
+    import sys
+
     from scripts.n8n_api import carregar_env
+
+    # --app-secret <valor>: grava o App Secret da Meta no .env, regera o .env.n8n e reinicia o n8n.
+    if "--app-secret" in sys.argv:
+        indice = sys.argv.index("--app-secret") + 1
+        if indice >= len(sys.argv) or not sys.argv[indice].strip():
+            sys.exit("uso: python -m scripts.aula12.infra --app-secret <valor>")
+        definir_env(RAIZ / ".env", "META_APP_SECRET", sys.argv[indice].strip())
+        ENV_N8N.write_text(env_n8n(carregar_env()), encoding="utf-8")
+        subprocess.run(["docker", "compose", "up", "-d"], cwd=AULA09, check=True)
+        print("App Secret gravado (valor não exibido) e n8n reiniciado com o novo .env.n8n.")
+        sys.exit(0)
 
     env = carregar_env()
     conteudo_env_n8n = env_n8n(env)

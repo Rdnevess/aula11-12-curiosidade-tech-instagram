@@ -11,6 +11,17 @@ DOMINIO = "exemplo-fake.ngrok-free.app"
 PASTA_DIARIO = "C:/Users/PC/Desktop/Aula Top Esp Programacao/aula11-n8n-insta/diario"
 
 
+class TestDefinirEnv(unittest.TestCase):
+    def test_substitui_ou_acrescenta_sem_mexer_no_resto(self):
+        import tempfile
+        caminho = Path(tempfile.mkdtemp()) / ".env"
+        caminho.write_text("A=1\nMETA_APP_SECRET=velho\nB=2", encoding="utf-8")
+        infra.definir_env(caminho, "META_APP_SECRET", "novo")
+        self.assertEqual(caminho.read_text(encoding="utf-8"), "A=1\nMETA_APP_SECRET=novo\nB=2\n")
+        infra.definir_env(caminho, "OUTRA", "x")
+        self.assertTrue(caminho.read_text(encoding="utf-8").endswith("B=2\nOUTRA=x\n"))
+
+
 class TestEnvN8n(unittest.TestCase):
     def test_contem_as_tres_linhas(self):
         saida = infra.env_n8n({
