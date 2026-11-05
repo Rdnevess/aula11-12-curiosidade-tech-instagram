@@ -41,14 +41,11 @@ class ComandoTest(unittest.TestCase):
         self.assertIn(f'"{NGROK_FAKE}"', linha)
 
 
-class TarefaTest(unittest.TestCase):
-    def test_aspas_internas_escapadas_como_no_diario(self):
-        caminho = "C:/fake/diario/tunel.cmd"
-        linha = tunel.tarefa(caminho)
-        self.assertEqual(
-            linha,
-            f'schtasks /Create /F /SC ONLOGON /TN "CuriosidadeTech\\tunel" /TR "\\"{caminho}\\""',
-        )
+class VbsTest(unittest.TestCase):
+    def test_roda_o_cmd_escondido_com_aspas_triplas(self):
+        caminho = "C:/fake dir/diario/tunel.cmd"
+        self.assertEqual(tunel.vbs(caminho),
+                         'CreateObject("WScript.Shell").Run """C:/fake dir/diario/tunel.cmd""", 0, False\r\n')
 
 
 class PastaTemporariaMixin:
@@ -75,24 +72,36 @@ class EscreverCmdTest(PastaTemporariaMixin, unittest.TestCase):
         self.assertIn(tunel.comando(DOMINIO, POLITICA, ngrok=NGROK_FAKE), texto)
 
 
-class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
+class InstalarTest(PastaTemporariaMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.inicio = Path(tempfile.mkdtemp()) / "Startup"
+        patcher = mock.patch.object(tunel, "PASTA_INICIALIZAR", self.inicio)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _saida(self, confirmar):
         saida = io.StringIO()
-        with contextlib.redirect_stdout(saida), mock.patch.object(tunel.subprocess, "run") as run:
-            tunel.agendar(DOMINIO, confirmar, ngrok=NGROK_FAKE)
-        return saida.getvalue(), run
+        with contextlib.redirect_stdout(saida), mock.patch.object(tunel.subprocess, "Popen") as popen:
+            tunel.instalar(DOMINIO, confirmar, ngrok=NGROK_FAKE)
+        return saida.getvalue(), popen
 
-    def test_sem_confirmar_nao_executa_schtasks(self):
-        saida, run = self._saida(False)
-        run.assert_not_called()
-        linha_esperada = tunel.tarefa(self.pasta / "tunel.cmd")
-        self.assertIn(linha_esperada, saida)
-        self.assertIn("(nada foi agendado", saida)
+    def test_sem_confirmar_so_imprime(self):
+        saida, popen = self._saida(False)
+        popen.assert_not_called()
+        self.assertFalse((self.inicio / "tunel-curiosidadetech.vbs").exists())
+        self.assertIn("(nada foi instalado", saida)
 
-    def test_confirmar_executa_a_mesma_linha_impressa(self):
-        saida, run = self._saida(True)
-        linha_esperada = tunel.tarefa(self.pasta / "tunel.cmd")
-        run.assert_called_once_with(linha_esperada, check=True)
+    def test_confirmar_grava_vbs_na_inicializacao_e_sobe_agora(self):
+        saida, popen = self._saida(True)
+        vbs = self.inicio / "tunel-curiosidadetech.vbs"
+        self.assertEqual(vbs.read_bytes(), tunel.vbs(self.pasta / "tunel.cmd").encode("utf-8"))
+        popen.assert_called_once_with(["wscript.exe", str(vbs)])
+
+    def test_cmd_nao_sobe_segunda_instancia(self):
+        self._saida(False)
+        texto = (self.pasta / "tunel.cmd").read_text(encoding="utf-8")
+        self.assertIn('tasklist /FI "IMAGENAME eq ngrok.exe"', texto)
 
 
 class MainTest(unittest.TestCase):
@@ -101,17 +110,17 @@ class MainTest(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 tunel.main([])
 
-    def test_chama_agendar_com_dominio_e_flag_confirmar(self):
+    def test_chama_instalar_com_dominio_e_flag_confirmar(self):
         with mock.patch.object(tunel, "carregar_env", return_value={"NGROK_DOMINIO": DOMINIO}), \
-                mock.patch.object(tunel, "agendar") as agendar:
+                mock.patch.object(tunel, "instalar") as instalar:
             tunel.main(["--confirmar"])
-        agendar.assert_called_once_with(DOMINIO, True)
+        instalar.assert_called_once_with(DOMINIO, True)
 
-    def test_sem_flag_chama_agendar_com_confirmar_falso(self):
+    def test_sem_flag_chama_instalar_com_confirmar_falso(self):
         with mock.patch.object(tunel, "carregar_env", return_value={"NGROK_DOMINIO": DOMINIO}), \
-                mock.patch.object(tunel, "agendar") as agendar:
+                mock.patch.object(tunel, "instalar") as instalar:
             tunel.main([])
-        agendar.assert_called_once_with(DOMINIO, False)
+        instalar.assert_called_once_with(DOMINIO, False)
 
 
 class PoliticaYamlTest(unittest.TestCase):

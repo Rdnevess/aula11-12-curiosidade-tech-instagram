@@ -7,6 +7,7 @@ no logon do Windows.
 Uso: python -m scripts.aula12.tunel [--confirmar]
 (sem --confirmar, só imprime o que seria feito)
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -18,7 +19,11 @@ RAIZ = Path(__file__).resolve().parent.parent.parent
 PASTA_DADOS = RAIZ / "diario"
 POLITICA = Path(__file__).resolve().parent / "ngrok-politica.yml"
 PORTA = 5678
-TAREFA = "CuriosidadeTech\\tunel"
+# Pasta Inicializar do usuário: roda no logon sem precisar de administrador
+# (uma tarefa agendada ONLOGON exige administrador).
+PASTA_INICIALIZAR = (Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows"
+                     / "Start Menu" / "Programs" / "Startup")
+VBS = "tunel-curiosidadetech.vbs"
 # ngrok instalado pelo winget pode não estar no PATH de uma tarefa agendada
 # (que roda num ambiente diferente do terminal interativo); por isso o
 # caminho absoluto de instalação serve de reserva.
@@ -50,7 +55,10 @@ def escrever_cmd(dominio, politica, ngrok=None):
         "@echo off\r\n"
         f'cd /d "{RAIZ}"\r\n'
         ":loop\r\n"
+        # Se já houver um ngrok rodando (ex.: logon repetido), não sobe outro.
+        'tasklist /FI "IMAGENAME eq ngrok.exe" | find /i "ngrok.exe" >nul && goto espera\r\n'
         f"{comando(dominio, politica, ngrok)}\r\n"
+        ":espera\r\n"
         "timeout /t 30 /nobreak >nul\r\n"
         "goto loop\r\n"
     )
@@ -58,21 +66,22 @@ def escrever_cmd(dominio, politica, ngrok=None):
     return arquivo
 
 
-def tarefa(cmd_path):
-    # Mesma forma documentada em scripts/diario/__main__.py: o caminho tem
-    # espaços e o schtasks tira as aspas de fora do /TR, por isso as aspas
-    # internas escapadas que sobram na tarefa salva.
-    return f'schtasks /Create /F /SC ONLOGON /TN "{TAREFA}" /TR "\\"{cmd_path}\\""'
+def vbs(cmd_path):
+    """Script que roda o .cmd escondido (janela 0) sem esperar."""
+    return f'CreateObject("WScript.Shell").Run """{cmd_path}""", 0, False\r\n'
 
 
-def agendar(dominio, confirmar, ngrok=None):
+def instalar(dominio, confirmar, ngrok=None):
     arquivo = escrever_cmd(dominio, POLITICA, ngrok)
-    linha = tarefa(arquivo)
-    print(linha)
+    destino = PASTA_INICIALIZAR / VBS
+    print(f"{destino} -> {arquivo}")
     if confirmar:
-        subprocess.run(linha, check=True)
+        PASTA_INICIALIZAR.mkdir(parents=True, exist_ok=True)
+        destino.write_text(vbs(arquivo), encoding="utf-8", newline="")
+        subprocess.Popen(["wscript.exe", str(destino)])
+        print("túnel instalado na inicialização e iniciado agora")
     else:
-        print("(nada foi agendado; rode com --confirmar para criar a tarefa)")
+        print("(nada foi instalado; rode com --confirmar)")
 
 
 def main(argumentos):
@@ -80,7 +89,7 @@ def main(argumentos):
     dominio = env.get("NGROK_DOMINIO")
     if not dominio:
         sys.exit("defina NGROK_DOMINIO no .env")
-    agendar(dominio, "--confirmar" in argumentos)
+    instalar(dominio, "--confirmar" in argumentos)
 
 
 if __name__ == "__main__":
