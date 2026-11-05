@@ -51,6 +51,14 @@ class TestAssinatura(unittest.TestCase):
         sem_prefixo = self.cabecalho.replace("sha256=", "")
         self.assertFalse(self.chamar(sem_prefixo))
 
+    def test_hex_invalido_e_invalido(self):
+        self.assertFalse(self.chamar("sha256=not-hex!!"))
+
+    def test_hex_de_tamanho_impar_e_invalido(self):
+        # hexadecimal válido (só 0-9a-f), mas com número ímpar de dígitos:
+        # não forma bytes completos, então não pode ser a assinatura.
+        self.assertFalse(self.chamar("sha256=abc"))
+
 
 class TestEventos(unittest.TestCase):
     def test_comentario_do_arquivo_de_exemplo(self):
@@ -232,6 +240,40 @@ class TestAgente(unittest.TestCase):
     def test_prompt_nao_contem_registros_pendentes(self):
         prompt = js_util.chamar("agente", "promptSistema", self.historico, 30)
         self.assertNotIn("NaoDeveAparecer", prompt)
+
+    def test_prompt_e_igual_ao_texto_aprovado_com_posts_substituidos(self):
+        # Deriva o esperado do próprio arquivo aprovado (não do JS), para
+        # que uma paráfrase no agente.js seja pega por este teste.
+        caminho = (
+            RAIZ
+            / ".superpowers"
+            / "sdd"
+            / "2026-11-05-aula12-respostas"
+            / "prompt-aprovado.txt"
+        )
+        linhas = caminho.read_text(encoding="utf-8").split("\n")
+        while linhas and linhas[-1] == "":
+            linhas.pop()
+        self.assertTrue(linhas[-1].startswith("(+ design"))
+        linhas.pop()  # remove a nota de implementação; não faz parte do prompt
+
+        indice_placeholder = next(
+            i for i, l in enumerate(linhas) if "{para cada post" in l
+        )
+        linhas[indice_placeholder : indice_placeholder + 1] = [
+            "  2026-11-04 · T · nasa.gov, si.edu"
+        ]
+        linhas.append(
+            "- Quando encaminhar ao responsável, termine a resposta com a marca [ENCAMINHAR]."
+        )
+        esperado = "\n".join(linhas)
+
+        prompt = js_util.chamar("agente", "promptSistema", self.historico, 30)
+        self.assertEqual(prompt, esperado)
+
+    def test_prompt_sem_posts_usa_marcador_nenhum_ainda(self):
+        prompt = js_util.chamar("agente", "promptSistema", {}, 30)
+        self.assertIn("  (nenhum ainda)", prompt)
 
     def test_separar_encaminhar_retira_marca(self):
         self.assertEqual(
