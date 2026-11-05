@@ -99,3 +99,13 @@ class PublicarArquivoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UrlLocalTest(unittest.TestCase):
+    def test_troca_o_dominio_publico_pelo_n8n_local(self):
+        url = "https://visiting-sagging-magnify.ngrok-free.dev/form-waiting/56?x=1"
+        self.assertEqual(publicar_mod._local(url), publicar_mod.BASE_URL.rstrip("/") + "/form-waiting/56?x=1")
+
+    def test_url_ja_local_fica_igual(self):
+        url = publicar_mod.BASE_URL.rstrip("/") + "/form-waiting/7"
+        self.assertEqual(publicar_mod._local(url), url)

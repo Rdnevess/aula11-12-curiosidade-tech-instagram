@@ -52,6 +52,13 @@ def registrar(resultado, caminho=RESULTADOS):
     caminho.write_text(json.dumps(lista, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _local(url):
+    """O n8n monta a URL de espera com o WEBHOOK_URL público (túnel da Aula 12), que só deixa passar
+    /webhook/instagram. O script fala sempre com o n8n local: troca esquema e host pelo BASE_URL."""
+    partes, base = urllib.parse.urlsplit(url), urllib.parse.urlsplit(BASE_URL)
+    return urllib.parse.urlunsplit((base.scheme, base.netloc, partes.path, partes.query, partes.fragment))
+
+
 def _url_status(form_waiting_url):
     partes = urllib.parse.urlsplit(form_waiting_url)
     return urllib.parse.urlunsplit((partes.scheme, partes.netloc, partes.path + "/n8n-execution-status",
@@ -73,6 +80,8 @@ def _enviar(caminho, legenda):
         espera = json.loads(texto).get("formWaitingUrl")
     except ValueError:
         espera = None
+    if espera:
+        espera = _local(espera)
     if not espera:
         return
     # Com um nó Form Ending, o formulário vira multi-etapas: espera o status "form-waiting",
