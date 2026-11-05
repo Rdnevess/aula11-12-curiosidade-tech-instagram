@@ -13,6 +13,13 @@ from datetime import date
 from scripts.diario import config, fluxo, telegram
 
 TAREFA_ANTIGA = "CuriosidadeTech\\rodar"  # de antes dos dois posts por dia
+RETENTATIVA_MIN = 40  # se o post falhar (ex.: Gemini sobrecarregado), tenta de novo 40 min depois
+
+
+def _mais_minutos(hora, minutos):
+    h, m = map(int, hora.split(":"))
+    total = (h * 60 + m + minutos) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
 
 
 def _cmd(nome, argumentos=None):
@@ -33,11 +40,13 @@ def agendar(confirmar):
     def tr(nome, argumentos=None):
         return f'/TR "\\"{_cmd(nome, argumentos)}\\""'
 
-    tarefas = [
-        f'schtasks /Create /F /SC DAILY /ST {hora} /TN "CuriosidadeTech\\rodar-{slot}" '
-        f'{tr(f"rodar-{slot}", f"rodar --slot {slot}")}'
-        for slot, hora in sorted(config.HORARIOS.items())
-    ]
+    tarefas = []
+    for slot, hora in sorted(config.HORARIOS.items()):
+        acao = tr(f"rodar-{slot}", f"rodar --slot {slot}")
+        tarefas.append(f'schtasks /Create /F /SC DAILY /ST {hora} /TN "CuriosidadeTech\\rodar-{slot}" {acao}')
+        # Nova tentativa 40 min depois, com o mesmo .cmd: se o slot já foi resolvido, o rodar só imprime "pulado".
+        tarefas.append(f'schtasks /Create /F /SC DAILY /ST {_mais_minutos(hora, RETENTATIVA_MIN)} '
+                       f'/TN "CuriosidadeTech\\rodar-{slot}-retentativa" {acao}')
     tarefas.append(f'schtasks /Create /F /SC MINUTE /MO 10 /TN "CuriosidadeTech\\verificar" {tr("verificar")}')
     for tarefa in tarefas:
         print(tarefa)

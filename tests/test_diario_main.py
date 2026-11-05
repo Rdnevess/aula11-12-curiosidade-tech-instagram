@@ -73,7 +73,7 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
     def test_tres_tarefas_com_horarios_e_tr_escapado(self):
         linhas = self._saida()
         criar = [l for l in linhas if l.startswith("schtasks /Create")]
-        self.assertEqual(len(criar), 3)
+        self.assertEqual(len(criar), 5)
         esperado = {"rodar-1": "/SC DAILY /ST 09:00", "rodar-2": "/SC DAILY /ST 11:00", "verificar": "/SC MINUTE /MO 10"}
         for nome, agenda in esperado.items():
             caminho = str(self.pasta / f"{nome}.cmd")
@@ -84,6 +84,13 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
         self.assertIn(b"rodar --slot 1", (self.pasta / "rodar-1.cmd").read_bytes())
         self.assertIn(b"rodar --slot 2", (self.pasta / "rodar-2.cmd").read_bytes())
         self.assertIn(b"scripts.diario verificar >>", (self.pasta / "verificar.cmd").read_bytes())
+
+    def test_nova_tentativa_40_min_depois_com_o_mesmo_cmd(self):
+        linhas = self._saida()
+        for slot, hora in ((1, "09:40"), (2, "11:40")):
+            linha = next(l for l in linhas if f'/TN "CuriosidadeTech\\rodar-{slot}-retentativa"' in l)
+            self.assertIn(f"/SC DAILY /ST {hora}", linha)
+            self.assertIn('/TR "\\"' + str(self.pasta / f"rodar-{slot}.cmd") + '\\""', linha)
 
     def test_imprime_remocao_da_tarefa_antiga(self):
         linhas = self._saida()
@@ -96,7 +103,7 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
         impressos = [l for l in saida.getvalue().splitlines() if l.startswith("schtasks")]
         comandos = [c.args[0] for c in run.call_args_list]
         self.assertEqual(comandos, impressos)
-        self.assertEqual(len(comandos), 4)
+        self.assertEqual(len(comandos), 6)
         for c in run.call_args_list:
             if "/Create" in c.args[0]:
                 self.assertTrue(c.kwargs.get("check"))
