@@ -1,0 +1,424 @@
+{
+  "name": "Aula 12 - Comentários e Direct",
+  "nodes": [
+    {
+      "id": "0f5e09fc-ab3f-5682-83d9-160760c0725a",
+      "name": "Evento do Instagram",
+      "webhookId": "fe170180-e558-5111-89cd-8c615a5e629e",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram",
+        "responseMode": "onReceived",
+        "options": {
+          "rawBody": true
+        }
+      }
+    },
+    {
+      "id": "f9eb5962-c8ac-56c3-9bdc-139900a761e7",
+      "name": "Conferir assinatura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Nó Code \"Conferir assinatura\" do workflow \"Aula 12 - Comentários e Direct\".\n//\n// Confere a assinatura HMAC-SHA256 que a Meta envia no cabeçalho\n// x-hub-signature-256, no formato \"sha256=<hex>\", calculada sobre o\n// corpo bruto (raw) da requisição com o App Secret. A comparação é em\n// tempo constante (crypto.timingSafeEqual) para não vazar o segredo por\n// temporização. Qualquer cabeçalho ausente, malformado ou com assinatura\n// errada resulta em false (o workflow descarta o evento).\nconst crypto = require('crypto');\n\nfunction assinaturaValida(corpoBuffer, cabecalho, segredo) {\n  if (!cabecalho || typeof cabecalho !== 'string') return false;\n  if (!segredo) return false;\n\n  const prefixo = 'sha256=';\n  if (!cabecalho.startsWith(prefixo)) return false;\n\n  const assinaturaRecebida = cabecalho.slice(prefixo.length);\n  if (!/^[0-9a-f]+$/i.test(assinaturaRecebida) || assinaturaRecebida.length % 2 !== 0) return false;\n\n  const corpo = Buffer.isBuffer(corpoBuffer) ? corpoBuffer : Buffer.from(String(corpoBuffer == null ? '' : corpoBuffer), 'utf8');\n  const esperada = crypto.createHmac('sha256', segredo).update(corpo).digest('hex');\n\n  const bufRecebido = Buffer.from(assinaturaRecebida, 'hex');\n  const bufEsperado = Buffer.from(esperada, 'hex');\n  if (bufRecebido.length !== bufEsperado.length) return false;\n\n  try {\n    return crypto.timingSafeEqual(bufRecebido, bufEsperado);\n  } catch (e) {\n    return false;\n  }\n}\n\nif (typeof module !== 'undefined') module.exports = { assinaturaValida };\n\n// ---- Nó \"Conferir assinatura\" ----\n// O Webhook entrega o corpo bruto no binário \"data\" (opção Raw Body). Sem\n// assinatura válida, o item é descartado e o workflow termina aqui.\nconst saida = [];\nconst itens = $input.all();\nfor (let i = 0; i < itens.length; i++) {\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const cabecalho = (itens[i].json.headers || {})['x-hub-signature-256'];\n  if (!assinaturaValida(buf, cabecalho, $env.META_APP_SECRET)) continue;\n  saida.push({ json: { corpo: JSON.parse(buf.toString('utf8')) }, pairedItem: i });\n}\nreturn saida;\n"
+      }
+    },
+    {
+      "id": "b8f1e81b-22aa-5ac0-8979-dde40548b385",
+      "name": "Separar eventos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Nó Code \"Separar eventos\" do workflow \"Aula 12 - Comentários e Direct\".\n//\n// A Meta envia um POST com object, entry[] e, dentro de cada entry,\n// changes[] (comentários) ou messaging[] (mensagens do Direct). Esta\n// função devolve um item por evento (apostila, seção 4.2), já descartando\n// o que não interessa:\n//   - mudanças cujo field não é \"comments\" (ex.: \"mentions\");\n//   - mensagens sem texto (fotos, áudios, reações, confirmações de leitura);\n//   - ecos da própria conta no Direct (message.is_echo);\n//   - comentários feitos pela própria conta (from.id === contaId), que é\n//     a trava contra loop (seção 2.4 da apostila) — aqui adiantada para\n//     dentro deste nó, para todo evento que escapar já sair filtrado.\nfunction separarEventos(corpo, contaId) {\n  const saida = [];\n  const dados = corpo || {};\n\n  for (const entrada of (dados.entry || [])) {\n    for (const mudanca of (entrada.changes || [])) {\n      if (mudanca.field !== 'comments') continue;\n\n      const v = mudanca.value || {};\n      const deId = v.from && v.from.id;\n      if (contaId && deId === contaId) continue;\n\n      saida.push({\n        tipo: 'comentario',\n        comentario_id: v.id,\n        texto: v.text || '',\n        de_id: deId,\n        de_usuario: v.from && v.from.username,\n        midia_id: v.media && v.media.id,\n        pai_id: v.parent_id || null,\n      });\n    }\n\n    for (const m of (entrada.messaging || [])) {\n      if (!m.message || !m.message.text || m.message.is_echo) continue;\n\n      saida.push({\n        tipo: 'mensagem',\n        remetente: m.sender && m.sender.id,\n        texto: m.message.text,\n        mensagem_id: m.message.mid,\n      });\n    }\n  }\n\n  return saida;\n}\n\nif (typeof module !== 'undefined') module.exports = { separarEventos };\n\n// ---- Nó \"Separar eventos\" ----\nreturn $input.all().flatMap((item) =>\n  separarEventos(item.json.corpo, $env.INSTAGRAM_CONTA_ID).map((evento) => ({ json: evento })));\n"
+      }
+    },
+    {
+      "id": "ad926586-04d2-5ba7-b49c-a98153d43a8b",
+      "name": "Tipo de evento",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "comentario",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "comentario",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "comentario"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "mensagem",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "mensagem",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "mensagem"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b4beb20d-d683-50a6-85df-25bbe6632f50",
+      "name": "Histórico",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/dados/diario/historico.json",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      }
+    },
+    {
+      "id": "e1a4aaba-cc41-5348-9fe2-f7f7bc10c48b",
+      "name": "Responder?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Nó Code \"Responder?\" do workflow \"Aula 12 - Comentários e Direct\".\n//\n// Decide se um comentário recebe resposta automática e monta o texto,\n// usando os dados do próprio post (fato, fontes, falas) lidos do\n// histórico diário. Não trata o antispam (chave Redis resp:<midia>:<de>),\n// que é feito por um nó Redis separado, depois deste.\n//\n// Regras (Global Constraints da Aula 12, seção 2 do design): a primeira\n// palavra-chave que casar no texto normalizado do comentário vence.\nconst REGRAS = [\n  {\n    id: 1,\n    palavras: ['fonte', 'fontes', 'referencia', 'de onde', 'verdade', 'e real', 'fake'],\n    montar(registro) {\n      const dominios = dominiosBase(registro.fontes || [], 3);\n      if (!dominios.length) return null;\n      return `As fontes deste post: ${dominios.join(', ')}.`;\n    },\n  },\n  {\n    id: 2,\n    palavras: ['mais', 'detalhe', 'explica', 'como assim', 'curiosidade'],\n    montar(registro) {\n      return fraseExtra(registro.fato, registro.falas || []);\n    },\n  },\n  {\n    id: 3,\n    palavras: ['horario', 'que horas', 'quando', 'todo dia'],\n    montar() {\n      return 'Postamos 2 curiosidades por dia, às 10h e às 12h (Brasília).';\n    },\n  },\n  {\n    id: 4,\n    palavras: ['obrigad', 'valeu', 'top', 'massa', 'incrivel', 'parabens', '👏', '🔥'],\n    montar() {\n      return 'Valeu! 🙌 Amanhã tem mais.';\n    },\n  },\n];\n\nconst SUFIXO = ' (resposta automática)';\n\n// Minúsculas e sem acento (NFD + remoção dos diacríticos). Emojis passam\n// intactos pela normalização.\nfunction normalizar(t) {\n  return String(t == null ? '' : t)\n    .normalize('NFD')\n    .replace(/[̀-ͯ]/g, '')\n    .toLowerCase();\n}\n\n// Casa uma palavra-chave contra o texto já normalizado.\n//   - frases (têm espaço) e emojis (não têm letra a-z): substring simples.\n//   - palavra única: precisa começar um \"token\" do texto (separado por\n//     qualquer caractere que não seja letra/dígito). Isso cobre radicais\n//     como \"obrigad\" (casa \"obrigado\"/\"obrigada\") sem deixar palavras\n//     curtas como \"mais\" casarem dentro de outra palavra, como em\n//     \"demais\" (\"demais\" não começa com \"mais\").\nfunction casaPalavra(textoNormalizado, palavraOriginal) {\n  const palavra = normalizar(palavraOriginal);\n  if (!palavra) return false;\n\n  const ehFrase = palavra.includes(' ');\n  const ehEmoji = !/[a-z]/.test(palavra);\n  if (ehFrase || ehEmoji) {\n    return textoNormalizado.includes(palavra);\n  }\n\n  const tokens = textoNormalizado.split(/[^a-z0-9]+/).filter(Boolean);\n  return tokens.some((tok) => tok.startsWith(palavra));\n}\n\nfunction casaRegra(textoNormalizado, palavras) {\n  return palavras.some((p) => casaPalavra(textoNormalizado, p));\n}\n\n// Mesma regra de scripts/diario/trava.py::dominio_base: últimos 2 rótulos,\n// ou últimos 3 quando o penúltimo é um TLD genérico (com, gov, org, edu,\n// net, ac, co) e o último tem 2 letras (ccTLD, ex.: uol.com.br).\nfunction dominioBase(dominio) {\n  const labels = String(dominio || '').toLowerCase().split('.');\n  if (labels.length <= 2) return labels.join('.');\n\n  const penultimo = labels[labels.length - 2];\n  const ultimo = labels[labels.length - 1];\n  const tldsGenericos = new Set(['com', 'gov', 'org', 'edu', 'net', 'ac', 'co']);\n  if (tldsGenericos.has(penultimo) && ultimo.length === 2 && /^[a-z]+$/.test(ultimo)) {\n    return labels.slice(-3).join('.');\n  }\n  return labels.slice(-2).join('.');\n}\n\nfunction dominiosBase(fontes, max) {\n  const limite = max || 3;\n  const vistos = new Set();\n  const resultado = [];\n  for (const f of (fontes || [])) {\n    const base = dominioBase(f && f.dominio);\n    if (!base || vistos.has(base)) continue;\n    vistos.add(base);\n    resultado.push(base);\n    if (resultado.length >= limite) break;\n  }\n  return resultado;\n}\n\n// Frases separadas por pontuação final. Palavra significativa = palavra\n// normalizada com 4 letras ou mais. Escolhe a primeira frase cujas\n// palavras significativas aparecem em menos de 50% nas falas do roteiro;\n// se nenhuma atender, usa a primeira frase do fato.\nfunction palavrasSignificativas(frase) {\n  return normalizar(frase).split(/[^a-z0-9]+/).filter((p) => p.length >= 4);\n}\n\nfunction fraseExtra(fato, falas) {\n  const texto = String(fato == null ? '' : fato).trim();\n  if (!texto) return '';\n\n  const frases = texto.split(/(?<=[.!?])\\s+/).map((f) => f.trim()).filter(Boolean);\n  if (!frases.length) return '';\n\n  const falasNormalizadas = (falas || []).map(normalizar);\n\n  function fracaoPresente(frase) {\n    const palavras = palavrasSignificativas(frase);\n    if (!palavras.length) return 0;\n    const presentes = palavras.filter((p) => falasNormalizadas.some((f) => f.includes(p)));\n    return presentes.length / palavras.length;\n  }\n\n  const escolhida = frases.find((f) => fracaoPresente(f) < 0.5);\n  return escolhida || frases[0];\n}\n\n// Procura, no histórico, o registro publicado/manual cuja media_id é a\n// da mídia comentada.\nfunction postPorMidia(historico, midiaId) {\n  if (!midiaId) return null;\n  const registros = historico || {};\n  for (const chave of Object.keys(registros)) {\n    const reg = registros[chave];\n    if (!reg) continue;\n    if ((reg.status === 'publicado' || reg.status === 'manual') && reg.media_id === midiaId) {\n      return reg;\n    }\n  }\n  return null;\n}\n\n// Corta o texto para que, com o sufixo, o total fique em até 300\n// caracteres, sempre em palavra inteira, marcando o corte com \"…\".\nfunction finalizarResposta(corpo) {\n  const texto = String(corpo == null ? '' : corpo).trim();\n  const completa = texto + SUFIXO;\n  if (completa.length <= 300) return completa;\n\n  const limite = 300 - SUFIXO.length - 1; // 1 caractere reservado para \"…\"\n  let cortado = texto.slice(0, Math.max(limite, 0));\n  const ultimoEspaco = cortado.lastIndexOf(' ');\n  if (ultimoEspaco > 0) cortado = cortado.slice(0, ultimoEspaco);\n  cortado = cortado.trimEnd() + '…';\n  return cortado + SUFIXO;\n}\n\n// Aplica os filtros (exceto o antispam, feito pelo nó Redis) e devolve a\n// resposta e a chave de antispam, ou null se não deve responder.\nfunction respostaComentario(evento, historico, contaId) {\n  if (!evento) return null;\n  if (contaId && evento.de_id === contaId) return null; // trava contra loop\n  if (evento.pai_id) return null; // só comentários de primeiro nível\n\n  const registro = postPorMidia(historico, evento.midia_id);\n  if (!registro) return null;\n\n  const textoNormalizado = normalizar(evento.texto || '');\n  for (const regra of REGRAS) {\n    if (!casaRegra(textoNormalizado, regra.palavras)) continue;\n    const corpo = regra.montar(registro);\n    if (!corpo) continue;\n    return {\n      resposta: finalizarResposta(corpo),\n      chave: 'resp:' + evento.midia_id + ':' + evento.de_id,\n    };\n  }\n  return null;\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { REGRAS, normalizar, dominiosBase, fraseExtra, postPorMidia, respostaComentario };\n}\n\n// ---- Nó \"Responder?\" ----\n// Item i: binário \"data\" = historico.json (nó Histórico); o evento é o item do\n// Switch pareado com ele. Sem resposta (null), o comentário termina aqui.\nconst saida = [];\nconst itens = $input.all();\nfor (let i = 0; i < itens.length; i++) {\n  const evento = $('Tipo de evento').itemMatching(i).json;\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const historico = JSON.parse(buf.toString('utf8'));\n  const r = respostaComentario(evento, historico, $env.INSTAGRAM_CONTA_ID);\n  if (!r) continue;\n  saida.push({ json: { comentario_id: evento.comentario_id, ...r }, pairedItem: i });\n}\nreturn saida;\n"
+      }
+    },
+    {
+      "id": "1c309468-d089-5c0f-acfe-a5b9a02fa72d",
+      "name": "Já respondido?",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        -100
+      ],
+      "parameters": {
+        "operation": "get",
+        "propertyName": "ja",
+        "key": "={{ $json.chave }}",
+        "keyType": "automatic",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "H0E3FCDnyVU1tTVY",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "id": "8908f429-b0b2-57ba-9e3c-2c74d6ad18a7",
+      "name": "Primeira vez?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ja",
+              "leftValue": "={{ $json.ja }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8f6c9cd3-f578-5554-b0bf-6a9c5781f178",
+      "name": "Responder comentário",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.instagram.com/{{ $('Responder?').item.json.comentario_id }}/replies",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {},
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $('Responder?').item.json.resposta }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "OhUx4faLk6mOALHc",
+          "name": "Instagram TEP"
+        }
+      }
+    },
+    {
+      "id": "f017b583-2976-5223-97fa-b31374b3599e",
+      "name": "Marcar respondido",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        -100
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $('Responder?').item.json.chave }}",
+        "value": "1",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "credentials": {
+        "redis": {
+          "id": "H0E3FCDnyVU1tTVY",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "id": "04fa4587-c0b7-540b-89eb-bc6c58c9e1cf",
+      "name": "Direct com agente",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YYjhGQdL72V9xApX"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "remetente": "={{ $json.remetente }}",
+            "texto": "={{ $json.texto }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "remetente",
+              "displayName": "remetente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Evento do Instagram": {
+      "main": [
+        [
+          {
+            "node": "Conferir assinatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir assinatura": {
+      "main": [
+        [
+          {
+            "node": "Separar eventos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar eventos": {
+      "main": [
+        [
+          {
+            "node": "Tipo de evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de evento": {
+      "main": [
+        [
+          {
+            "node": "Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Direct com agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Histórico": {
+      "main": [
+        [
+          {
+            "node": "Responder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder?": {
+      "main": [
+        [
+          {
+            "node": "Já respondido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já respondido?": {
+      "main": [
+        [
+          {
+            "node": "Primeira vez?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Primeira vez?": {
+      "main": [
+        [
+          {
+            "node": "Responder comentário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder comentário": {
+      "main": [
+        [
+          {
+            "node": "Marcar respondido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {}
+}
