@@ -108,8 +108,9 @@ def publicar_arquivo(caminho, legenda):
         raise ErroPublicacao(f"execução {execucao['id']}: sucesso, mas sem o link do post (nó \"Link do post\"); "
                              "confira no Instagram se o post foi publicado")
     midia = saida_json(execucao, "Preparar mídia") or {}
+    media_id = (saida_json(execucao, "Publicar") or {}).get("id")
     resultado = {"arquivo": caminho.name, "tipo": midia.get("tipo", "?"),
-                 "permalink": post["permalink"], "execucao_id": execucao["id"],
+                 "permalink": post["permalink"], "media_id": media_id, "execucao_id": execucao["id"],
                  "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")}
     try:
         registrar(resultado)

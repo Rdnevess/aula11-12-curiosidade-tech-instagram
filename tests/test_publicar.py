@@ -90,6 +90,12 @@ class PublicarArquivoTest(unittest.TestCase):
         with self.assertRaises(publicar_mod.ErroPublicacao):
             self._publicar({"Link do post": self._no({"outro": 1})})
 
+    def test_resultado_tem_media_id_do_no_publicar(self):
+        resultado, _ = self._publicar({"Publicar": self._no({"id": "1789"}),
+                                       "Link do post": self._no({"permalink": "https://www.instagram.com/reel/X/"}),
+                                       "Preparar mídia": self._no({"tipo": "video"})})
+        self.assertEqual(resultado["media_id"], "1789")
+
 
 if __name__ == "__main__":
     unittest.main()

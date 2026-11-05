@@ -135,6 +135,7 @@ def _publicar(d, chave, titulo, video, legenda, campos=None, rodape=""):
     # Publicação já aconteceu: uma falha daqui em diante não pode parecer falha de publicação.
     try:
         d.historico_atualizar(chave, {"status": "publicado", "permalink": resultado["permalink"],
+                                        "media_id": resultado.get("media_id"),
                                         "publicado_em": datetime.now().astimezone().isoformat(timespec="seconds")})
     except Exception as erro_pos:
         _tentar(d.avisar_texto, _aviso_pos_publicacao(resultado["permalink"], erro_pos))
@@ -193,7 +194,8 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
                            f"{'publicaria sozinho' if ok else 'seguraria: ' + '; '.join(motivos)}")
             return "ensaio"
         base = {"titulo": roteiro["titulo"], "titulo_pesquisa": fato["titulo"], "data_evento": fato.get("data"),
-                "fontes": fato.get("fontes", []), "video": str(mp4),
+                "fato": fato.get("fato"), "fontes": fato.get("fontes", []),
+                "falas": [trecho["fala"] for trecho in roteiro.get("trechos", [])], "video": str(mp4),
                 "legenda_post": roteiro["legenda_post"], "pasta": str(pasta)}
         if ok:
             etapa = "publicação"

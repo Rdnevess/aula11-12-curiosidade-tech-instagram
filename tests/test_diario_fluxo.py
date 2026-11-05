@@ -26,7 +26,7 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA)
         if publicar_erro:
             raise publicar_erro
         estado["publicados"].append((mp4, legenda))
-        return {"permalink": "https://instagram/p/1"}
+        return {"permalink": "https://instagram/p/1", "media_id": "1789"}
 
     d = fluxo.Dependencias(
         historico_carregar=lambda: copy.deepcopy(estado["hist"]),
@@ -56,7 +56,12 @@ class RodarTest(unittest.TestCase):
         d, e = deps()
         self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
         self.assertEqual(e["publicados"], [(Path("out.mp4"), "legenda")])
-        self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "publicado")
+        registro = e["hist"]["2026-11-03#1"]
+        self.assertEqual(registro["status"], "publicado")
+        self.assertEqual(registro["media_id"], "1789")
+        self.assertEqual(registro["fato"], FATO["fato"])
+        self.assertEqual(registro["fontes"], FATO["fontes"])
+        self.assertEqual(registro["falas"], ["Oi."])
         self.assertIn("✅", e["textos"][-1])
 
     def test_segura_e_manda_video(self):
@@ -313,13 +318,18 @@ class SlotsRodarTest(unittest.TestCase):
 
 class VerificarTest(unittest.TestCase):
     def test_publica_pendente_e_ignora_resolvido(self):
-        hist = {"2026-11-03#1": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"},
+        hist = {"2026-11-03#1": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg",
+                                 "fato": FATO["fato"], "fontes": FATO["fontes"], "falas": ["Oi."]},
                 "2026-11-02#1": {"titulo": "y", "status": "publicado"}}
         cliques = [{"acao": "pub", "chave": "2026-11-03#1", "id": "a"}, {"acao": "pub", "chave": "2026-11-02#1", "id": "b"}]
         d, e = deps(historico=hist, cliques=cliques)
         self.assertEqual(fluxo.verificar(d), 2)
         self.assertEqual(e["publicados"], [(Path("out.mp4"), "leg")])
-        self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "publicado")
+        registro = e["hist"]["2026-11-03#1"]
+        self.assertEqual(registro["status"], "publicado")
+        self.assertEqual(registro["media_id"], "1789")
+        self.assertEqual(registro["fato"], FATO["fato"])
+        self.assertEqual(registro["fontes"], FATO["fontes"])
         self.assertIn("já resolvido", e["respostas"][1][1])
         self.assertEqual(e["offset"], 2)
 
