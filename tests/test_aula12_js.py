@@ -242,20 +242,15 @@ class TestAgente(unittest.TestCase):
         self.assertNotIn("NaoDeveAparecer", prompt)
 
     def test_prompt_e_igual_ao_texto_aprovado_com_posts_substituidos(self):
-        # Deriva o esperado do próprio arquivo aprovado (não do JS), para
-        # que uma paráfrase no agente.js seja pega por este teste.
-        caminho = (
-            RAIZ
-            / ".superpowers"
-            / "sdd"
-            / "2026-11-05-aula12-respostas"
-            / "prompt-aprovado.txt"
-        )
+        # Deriva o esperado da fixture versionada (não do JS), para que uma
+        # paráfrase no agente.js seja pega por este teste. A fixture é uma
+        # cópia do texto aprovado (.superpowers/sdd/2026-11-05-aula12-respostas/
+        # prompt-aprovado.txt, pasta de scratch fora do git) sem a última
+        # linha, que era só uma nota de implementação, não texto do prompt.
+        caminho = RAIZ / "tests" / "fixtures" / "aula12" / "prompt-aprovado.txt"
         linhas = caminho.read_text(encoding="utf-8").split("\n")
         while linhas and linhas[-1] == "":
             linhas.pop()
-        self.assertTrue(linhas[-1].startswith("(+ design"))
-        linhas.pop()  # remove a nota de implementação; não faz parte do prompt
 
         indice_placeholder = next(
             i for i, l in enumerate(linhas) if "{para cada post" in l

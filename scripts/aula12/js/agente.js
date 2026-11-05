@@ -46,13 +46,15 @@ function dataDoRegistro(chave, registro) {
   return m ? m[1] : String(chave);
 }
 
-// Texto aprovado (.superpowers/sdd/2026-11-05-aula12-respostas/prompt-aprovado.txt),
-// copiado linha a linha. '__POSTS__' marca onde entra a lista de posts
-// (uma linha por post, ou "  (nenhum ainda)" se o histórico não tiver
-// nenhum publicado/manual). A última linha do arquivo aprovado
-// ("(+ design: ...)") é só uma nota de implementação, não faz parte do
-// prompt; em vez disso, a regra do [ENCAMINHAR] que ela descreve foi
-// adicionada como mais um item do bloco REGRAS.
+// Texto aprovado (ver fixture tests/fixtures/aula12/prompt-aprovado.txt,
+// conferida linha a linha pelo teste TestAgente em tests/test_aula12_js.py),
+// copiado aqui linha a linha. '__POSTS__' marca onde entra a lista de
+// posts (uma linha por post, ou "  (nenhum ainda)" se o histórico não
+// tiver nenhum publicado/manual). A fixture já não inclui a última linha
+// do texto aprovado original ("(+ design: ...)"), que era só uma nota de
+// implementação, não texto do prompt; em vez disso, a regra do
+// [ENCAMINHAR] que ela descreve foi adicionada como mais um item do
+// bloco REGRAS.
 function linhasModeloAprovado() {
   return [
     'Você é o assistente automático da conta @curiosidadetechhoje no Instagram.',
