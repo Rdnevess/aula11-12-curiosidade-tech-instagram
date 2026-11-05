@@ -1,0 +1,14 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.42.5          # versão exata: a interface muda entre versões
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"        # só esta máquina acessa o editor
+    environment:
+      - GENERIC_TIMEZONE=America/Cuiaba   # fuso dos agendamentos
+      - TZ=America/Cuiaba
+    volumes:
+      - n8n_data:/home/node/.n8n     # banco, chave de cifra e execuções
+volumes:
+  n8n_data:
