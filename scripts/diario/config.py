@@ -12,10 +12,13 @@ HORARIOS = {1: "09:00", 2: "11:00"}
 MODELO = "gemini-3.5-flash"
 MODELO_RESERVA = "gemini-3.5-flash-lite"
 MODELO_PESQUISA = "gpt-5.4-mini"
-MAX_FALA = 26.5
-MAX_VIDEO = 30.0
+# Vídeo de até 50 s (pedido do usuário em 09/11/2026): fala + lead + cartão final (END_HOLD) cabem nele.
+MAX_FALA = 46.5
+MAX_VIDEO = 50.0
 END_HOLD = 2.5
-MAX_PALAVRAS = 70
+MAX_PALAVRAS = 115
+MIN_PALAVRAS = 75
+MIN_TRECHOS, MAX_TRECHOS = 5, 8
 MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
 NOMES_CHAVES = ("GEMINI_API_KEY", "OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
 

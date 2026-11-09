@@ -31,6 +31,15 @@ html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--b
 .bar{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:2px solid var(--line);font:500 26px var(--mono);color:var(--muted)}
 .bar i{width:18px;height:18px;border-radius:50%;background:var(--line);display:inline-block}
 .alert{color:var(--alert)}
+/* fotos de referência (Wikimedia Commons) ao fundo: uma por trecho, com zoom lento e troca cruzada.
+   O véu escurece em cima (legenda) e embaixo (interface do Instagram) e deixa a foto aparecer no meio. */
+#fotos{position:absolute;inset:0;overflow:hidden}
+.foto{position:absolute;inset:-4%;visibility:hidden}
+.foto img{width:100%;height:100%;object-fit:cover;filter:saturate(.85) contrast(1.05)}
+#veu{position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,16,32,.96) 0%,rgba(11,16,32,.86) 36%,rgba(11,16,32,.42) 50%,rgba(11,16,32,.42) 74%,rgba(11,16,32,.93) 86%,#0B1020 100%)}
+#credito{left:72px;max-width:936px;top:1525px;font:500 22px var(--mono);color:rgba(244,247,255,.75);background:rgba(11,16,32,.7);border-radius:8px;padding:6px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#credito:empty{display:none}
+.date,.num,.sub{text-shadow:0 4px 0 #05070F,0 0 30px rgba(0,0,0,.85)}
 /* capa (cena auto): o Instagram usa o 1º quadro na grade do perfil, que corta o 9:16 para ~3:4
    (y 240–1680). Tudo o que importa fica em y 420–1500 e x 90–990. */
 #capa{position:absolute;inset:0;z-index:12;background:var(--bg)}
@@ -48,10 +57,12 @@ html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:var(--b
 </style>
 </head>
 <body>
+<div id="fotos"></div>
 <svg id="grid" width="1080" height="1920"></svg>
 <div class="abs" id="selo"></div>
 <div id="cap" class="abs"><p></p></div>
 <div id="scene"></div>
+<div class="abs" id="credito"></div>
 <div id="end" style="opacity:0">
   <div id="endSelo">HOJE NA HISTÓRIA DA TECH</div>
   <div id="endAt"></div>
@@ -114,6 +125,10 @@ function caption(t, S, D, lines, hideFrom = Infinity, showFrom = 0) {
   if (capKey !== String(i)) {
     p.innerHTML = words.map((w) => `<span class="w${HI.test(w.replace(/[…?!.,:;]/g, '')) ? ' hi' : ''}">${w}</span>`).join('')
     capKey = String(i)
+    // Fala longa: diminui a fonte (uma vez por trecho) até caber na faixa da legenda, sem invadir os blocos.
+    let size = 76
+    p.style.fontSize = `${size}px`
+    while (size > 44 && p.scrollHeight > $('#cap').clientHeight) p.style.fontSize = `${size -= 4}px`
   }
   p.querySelectorAll('.w').forEach((s, k) => {
     const q = clamp((t - (S[i] + (k / words.length) * D[i] * 0.85)) / 0.18)
@@ -257,7 +272,8 @@ const BLOCOS = {
     },
     // max-width:330px (painel 370px − ~20px de cada lado) + overflow-wrap:anywhere no HTML já
     // garantem que nada escapa do painel; o fit() aqui só evita 3+ linhas (shrink p/ ~2 linhas).
-    fit(d, i) { fit($(`#b${i}cp0`), 640, 64, 30); fit($(`#b${i}cp1`), 640, 64, 30) },
+    // Uma palavra só ("Eletromecânico") precisa caber inteira na largura do painel (330px), sem partir no meio.
+    fit(d, i) { [d.esquerda, d.direita].forEach((v, k) => fit($(`#b${i}cp${k}`), /\s/.test(String(v ?? '').trim()) ? 640 : 330, 64, 30)) },
     anim: () => null,
   },
 }
@@ -422,9 +438,38 @@ const SCENES = {
   // ── fim das cenas
 }
 
+// ── fotos de referência: data.fotos = [{arquivo, credito}], uma por trecho (repete se houver menos) ──
+const TROCA = 0.45
+function montarFotos(fotos, n) {
+  if (!fotos.length) return []
+  $('#fotos').innerHTML = Array.from({ length: n }, (_, i) =>
+    `<div class="foto" id="f${i}"><img src="${h(fotos[i % fotos.length].arquivo)}"></div>`).join('') + '<div id="veu"></div>'
+  return [...document.querySelectorAll('#fotos img')].map((img) => img.decode().catch(() => {}))
+}
+function desenharFotos(t, S, D, fotos) {
+  if (!fotos.length) return
+  let atual = 0
+  S.forEach((s, i) => {
+    const el = $(`#f${i}`)
+    const ini = i === 0 ? 0 : s - TROCA / 2, fim = i + 1 < S.length ? S[i + 1] - TROCA / 2 + TROCA : Infinity
+    const op = clamp((t - ini) / TROCA)
+    const ativa = t >= ini && t < fim
+    el.style.visibility = ativa ? 'visible' : 'hidden'
+    el.style.opacity = String(op)
+    if (ativa) atual = i
+    // Ken Burns: aproxima devagar e desliza, alternando o lado a cada trecho.
+    const dur = (i + 1 < S.length ? S[i + 1] : s + D[i] + 3) - ini
+    const p = clamp((t - ini) / Math.max(1, dur))
+    const lado = i % 2 ? -1 : 1
+    el.style.transform = `scale(${1.04 + 0.12 * p}) translate(${lado * lerp(-18, 18, p)}px, ${lerp(10, -14, p)}px)`
+  })
+  $('#credito').textContent = `Foto: ${fotos[atual % fotos.length].credito} · Wikimedia Commons`
+}
+
 // ── montagem ───────────────────────────────────────────────────────────────
 // data: { scene, selo ("28 OUT"), highlight:[palavras], endHold (s de cartão final, padrão 3,6) }
-window.setup = function ({ S, D, lines, data, voiceEnd }) {
+// Assíncrono: o render espera as fotos carregarem antes do 1º quadro.
+window.setup = async function ({ S, D, lines, data, voiceEnd }) {
   const sc = SCENES[data.scene]
   if (!sc) throw new Error(`cena desconhecida: ${data.scene}`)
   grid()
@@ -432,6 +477,7 @@ window.setup = function ({ S, D, lines, data, voiceEnd }) {
   HI = new RegExp(`^(${(data.highlight || []).map(esc).join('|') || '$^'})$`, 'i')
   $('#scene').innerHTML = sc.build(data)
   sc.afterBuild?.(data) // ajustes de tamanho (fit) uma única vez, com o DOM já montado
+  await Promise.all(montarFotos(data.fotos || [], S.length))
   const last = S.length - 1
   // por padrão o cartão final entra junto com a última fala; endAfterLast = depois dela, sem fala
   const outroAt = data.endAfterLast ? S[last] + D[last] + 0.3 : S[last] - 0.1
@@ -441,6 +487,8 @@ window.setup = function ({ S, D, lines, data, voiceEnd }) {
 window.render = function (t) {
   const { S, D, lines, data, sc, outroAt } = window.TL
   const events = sc.frame(t, S, D, data) || []
+  desenharFotos(t, S, D, data.fotos || [])
+  show($('#credito'), t, CAPA_ATE + CAPA_FADE, outroAt, { dy: 0, back: false })
   caption(t, S, D, lines, outroAt, sc.captionFrom ?? 0)
   show($('#selo'), t, 0, outroAt, { dy: -20, back: false })
   const pe = clamp((t - outroAt) / 0.35), end = $('#end')

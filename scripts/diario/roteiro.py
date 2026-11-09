@@ -3,7 +3,7 @@ import re
 from datetime import date
 
 from scripts.diario import gemini
-from scripts.diario.config import MAX_PALAVRAS, MODELO_RESERVA, selo
+from scripts.diario.config import MAX_FALA, MAX_PALAVRAS, MAX_TRECHOS, MIN_PALAVRAS, MIN_TRECHOS, MODELO_RESERVA, selo
 from scripts.diario.texto import ancoras
 
 ICONES = ("chip", "celular", "computador", "console", "cartucho", "globo", "satelite", "foguete", "robo",
@@ -20,13 +20,17 @@ BLOCOS = {
 OPCIONAIS = {"prefixo", "sufixo"}
 PONTUACAO = re.compile(r"[…?!.,:;\"“”()—–]")
 
-PROMPT = """Escreva o roteiro de um Reel de até 26 segundos de fala, em português do Brasil, para o perfil
+PROMPT = """Escreva o roteiro de um Reel de até {max_fala} segundos de fala, em português do Brasil, para o perfil
 @curiosidadetechhoje, sobre o fato abaixo. Use SOMENTE informações do fato.
 Fato ({data}): {titulo}. {fato}
 
 Regras:
-- 4 a 6 trechos curtos, no máximo {max_palavras} palavras somando todos, tom de criador de conteúdo falando com "você".
-- O 1º trecho é um gancho que gera curiosidade; o último fecha a história. Nenhum trecho cita o @ nem pede para seguir.
+- {min_trechos} a {max_trechos} trechos curtos, de {min_palavras} a {max_palavras} palavras somando todos, tom de criador de conteúdo falando com "você".
+- O 1º trecho é um gancho que gera curiosidade; o último fecha a história.
+- Conte a história completa, nesta ordem: gancho; o contexto (que problema existia ou como era antes); o que aconteceu,
+  com data, quem e onde; um detalhe técnico curioso (como funcionava, do que era feito); os números; e o impacto ou
+  legado até hoje. Use tudo o que o fato trouxer dessas partes.
+- Cada trecho com no máximo 18 palavras (vira a legenda na tela): divida uma ideia longa em dois trechos. Nenhum trecho cita o @ nem pede para seguir.
 - Todo trecho começa com uma palavra (nunca com número). Escreva números com algarismos.
 - Do 2º trecho em diante, a 1ª palavra tem pelo menos 2 letras (não comece com "A", "O" ou "E" sozinhos).
 - Cada trecho tem um bloco visual do catálogo; dois trechos seguidos não podem usar o mesmo bloco; o 1º é "gancho".
@@ -40,10 +44,12 @@ Regras:
 - Nada de logotipos ou marcas como ícone.
 - "destaques": 2 a 4 palavras exatamente como aparecem nas falas (uma palavra cada).
 - "legenda_post": 2 a 4 frases sobre o fato, com "Siga @curiosidadetechhoje" e 3 a 5 hashtags.
+- "busca_imagem": 1 a 3 palavras para achar FOTOS do assunto no Wikimedia Commons: o nome do computador, aparelho,
+  produto ou pessoa como aparece nos nomes de arquivo, em inglês (ex.: "ENIAC", "Mega Drive", "Pentium"). Nunca uma frase.
 Responda SOMENTE com JSON:
 {{"titulo": "...", "data": "{data}", "selo": "{selo}",
   "trechos": [{{"fala": "...", "bloco": "gancho", "dados": {{"icone": "...", "carimbo": "..."}}}}],
-  "destaques": ["..."], "legenda_post": "..."}}"""
+  "destaques": ["..."], "legenda_post": "...", "busca_imagem": "..."}}"""
 
 
 class ErroRoteiro(Exception):
@@ -107,12 +113,14 @@ def validar(roteiro, dia_evento, fato_texto):
     if not isinstance(trechos, list):
         problemas.append("trechos deve ser uma lista")
         return problemas
-    if not 4 <= len(trechos) <= 6:
-        problemas.append(f"esperados 4 a 6 trechos, há {len(trechos)}")
+    if not MIN_TRECHOS <= len(trechos) <= MAX_TRECHOS:
+        problemas.append(f"esperados {MIN_TRECHOS} a {MAX_TRECHOS} trechos, há {len(trechos)}")
     falas = [t.get("fala", "") if isinstance(t, dict) else "" for t in trechos]
     total = sum(len(f.split()) for f in falas)
     if total > MAX_PALAVRAS:
         problemas.append(f"{total} palavras; o máximo é {MAX_PALAVRAS}")
+    elif total < MIN_PALAVRAS:
+        problemas.append(f"{total} palavras; o mínimo é {MIN_PALAVRAS}: conte mais da história (contexto, detalhe técnico, impacto)")
     blocos = [t.get("bloco") if isinstance(t, dict) else None for t in trechos]
     if trechos and blocos[0] != "gancho":
         problemas.append("o 1º trecho deve usar o bloco gancho")
@@ -150,6 +158,9 @@ def validar(roteiro, dia_evento, fato_texto):
     for destaque in roteiro.get("destaques") or []:
         if PONTUACAO.sub("", destaque).lower() not in palavras:
             problemas.append(f"destaque '{destaque}' não aparece na fala")
+    busca = roteiro.get("busca_imagem")
+    if busca is not None and not (isinstance(busca, str) and len(busca.strip()) <= 40):
+        problemas.append("busca_imagem deve ser um texto de até 40 caracteres")
     legenda = roteiro.get("legenda_post", "")
     if len(legenda) > 2200 or "@curiosidadetechhoje" not in legenda or legenda.count("#") < 3:
         problemas.append("legenda_post precisa de @curiosidadetechhoje, 3+ hashtags e até 2.200 caracteres")
@@ -162,7 +173,8 @@ def validar(roteiro, dia_evento, fato_texto):
 
 def gerar_roteiro(fato, chave, modelo, gerar=gemini.gerar, tentativas=3):
     dia_evento = date.fromisoformat(fato["data"])
-    base = PROMPT.format(data=fato["data"], titulo=fato["titulo"], fato=fato["fato"], max_palavras=MAX_PALAVRAS,
+    base = PROMPT.format(data=fato["data"], titulo=fato["titulo"], fato=fato["fato"], max_palavras=MAX_PALAVRAS, min_palavras=MIN_PALAVRAS,
+                         min_trechos=MIN_TRECHOS, max_trechos=MAX_TRECHOS, max_fala=int(MAX_FALA),
                          icones=", ".join(ICONES), selo=selo(dia_evento))
     problemas = []
     for tentativa in range(1, tentativas + 1):

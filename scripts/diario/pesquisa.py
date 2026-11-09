@@ -27,7 +27,7 @@ Responda SOMENTE com um objeto JSON, sem texto antes ou depois:
 {{"candidatos": [
   {{"titulo": "nome curto do acontecimento",
     "data": "AAAA-MM-DD",
-    "fato": "3 a 5 frases em português com quem, o quê, onde, a data e os números exatos",
+    "fato": "5 a 8 frases em português: o contexto (que problema existia ou como era antes), quem, o quê, onde, a data, os números exatos, um detalhe técnico curioso (como funcionava) e o impacto ou legado até hoje",
     "numeros": ["cada número citado no fato, como aparece no texto"],
     "fontes": ["URLs das páginas que você usou para este acontecimento"]}}
 ]}}"""

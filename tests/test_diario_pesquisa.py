@@ -45,6 +45,11 @@ class PesquisarTest(unittest.TestCase):
         self.assertIn('"fontes"', prompt)
         self.assertIn("sites independentes", prompt)
 
+    def test_prompt_pede_fato_mais_rico(self):
+        self.assertIn("5 a 8 frases", pesquisa.PROMPT)
+        for item in ("contexto", "detalhe técnico", "impacto"):
+            self.assertIn(item, pesquisa.PROMPT)
+
     def test_rejeita_outro_dia(self):
         with self.assertRaises(pesquisa.ErroPesquisa):
             pesquisa.pesquisar(date(2026, 11, 4), {}, "K", "m", buscar=buscar_falso(FATO))

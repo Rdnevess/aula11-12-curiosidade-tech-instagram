@@ -12,13 +12,18 @@ FATO = {"titulo": "Lançamento do Sputnik 2", "data": "1957-11-03",
 ROTEIRO = {
     "titulo": "Lançamento do Sputnik 2", "data": "1957-11-03", "selo": "03 NOV",
     "trechos": [
-        {"fala": "Sabia que um cachorro foi o primeiro ser vivo em órbita?", "bloco": "gancho",
-         "dados": {"icone": "satelite", "carimbo": "ÓRBITA"}},
-        {"fala": "Em novembro de 1957, a União Soviética lançou o Sputnik 2.", "bloco": "data",
-         "dados": {"texto": "03/11/1957"}},
-        {"fala": "Dentro dele estava a cadela Laika.", "bloco": "fato", "dados": {"texto": "A bordo: a cadela Laika"}},
-        {"fala": "Esse satélite pesava 508 quilos.", "bloco": "numero",
+        {"fala": "Sabia que um cachorro foi o primeiro ser vivo a dar voltas completas ao redor da Terra?",
+         "bloco": "gancho", "dados": {"icone": "satelite", "carimbo": "ÓRBITA"}},
+        {"fala": "Em novembro de 1957, a União Soviética lançou o Sputnik 2, poucas semanas depois do primeiro satélite.",
+         "bloco": "data", "dados": {"texto": "03/11/1957"}},
+        {"fala": "Dentro dele estava a cadela Laika, escolhida entre vários cães de rua de Moscou.", "bloco": "fato",
+         "dados": {"texto": "A bordo: a cadela Laika"}},
+        {"fala": "Esse satélite pesava 508 quilos, muito mais do que o anterior.", "bloco": "numero",
          "dados": {"valor": 508, "prefixo": "", "sufixo": " kg", "legenda": "peso do Sputnik 2"}},
+        {"fala": "Comparado ao primeiro satélite, ele era enorme e levava instrumentos para medir radiação.",
+         "bloco": "comparacao", "dados": {"esquerda": "Sputnik 1", "direita": "Sputnik 2", "rotulos": ["antes", "depois"]}},
+        {"fala": "Essa missão abriu caminho para os voos tripulados que vieram nos anos seguintes.", "bloco": "fato",
+         "dados": {"texto": "Abriu caminho para voos tripulados"}},
     ],
     "destaques": ["Sputnik", "Laika", "508"],
     "legenda_post": "Em 03/11/1957 a URSS lançou o Sputnik 2. Siga @curiosidadetechhoje #espaco #historiadatecnologia #sputnik",
@@ -35,6 +40,29 @@ def com(alterar):
 class ValidarTest(unittest.TestCase):
     def test_roteiro_valido(self):
         self.assertEqual(roteiro.validar(ROTEIRO, DIA, FATO["fato"]), [])
+
+    def test_busca_imagem_opcional_e_curta(self):
+        self.assertIn('"busca_imagem"', roteiro.PROMPT)
+        self.assertEqual(roteiro.validar(com(lambda r: r.update(busca_imagem="Sputnik 2")), DIA, FATO["fato"]), [])
+        self.assertTrue(roteiro.validar(com(lambda r: r.update(busca_imagem="x" * 41)), DIA, FATO["fato"]))
+        self.assertTrue(roteiro.validar(com(lambda r: r.update(busca_imagem=3)), DIA, FATO["fato"]))
+
+    def test_prompt_pede_contexto_detalhe_tecnico_e_impacto(self):
+        for trecho in ("contexto", "detalhe técnico", "impacto"):
+            self.assertIn(trecho, roteiro.PROMPT)
+        self.assertNotIn("26 segundos", roteiro.PROMPT)
+
+    def test_maximo_de_oito_trechos(self):
+        def nove(r):
+            extra = [{"fala": "Depois disso tudo mudou.", "bloco": b, "dados": d} for b, d in
+                     [("data", {"texto": "03/11/1957"}), ("fato", {"texto": "x"})] * 2]
+            r["trechos"].extend(extra[:3])
+        self.assertTrue(any("trechos" in p for p in roteiro.validar(com(nove), DIA, FATO["fato"])))
+
+    def test_palavras_de_menos(self):
+        problemas = roteiro.validar(com(lambda r: [t.update(fala=t["fala"].split(",")[0]) for t in r["trechos"]]),
+                                    DIA, FATO["fato"])
+        self.assertTrue(any("mínimo" in p for p in problemas))
 
     def test_quantidade_de_trechos(self):
         self.assertTrue(roteiro.validar(com(lambda r: r["trechos"].__delitem__(slice(1, 4))), DIA, FATO["fato"]))
