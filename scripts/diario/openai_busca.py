@@ -61,10 +61,15 @@ def _urls_listadas_na_resposta(texto):
         dados = gemini.extrair_json(texto)
     except gemini.ErroGemini:
         return []
-    fontes = dados.get("fontes")
-    if not isinstance(fontes, list):
-        return []
-    return [f for f in fontes if isinstance(f, str)]
+    # Resposta com vários candidatos: cada um lista as próprias fontes.
+    listas = [dados.get("fontes")] + [c.get("fontes") for c in dados.get("candidatos") or [] if isinstance(c, dict)]
+    return [f for lista in listas if isinstance(lista, list) for f in lista if isinstance(f, str)]
+
+
+def filtrar_fontes(fontes, urls):
+    """As fontes (de buscar) cujas URLs estão em urls, comparadas sem query, "/" final e www."""
+    alvo = {_normalizar_comparacao(u) for u in urls if isinstance(u, str)}
+    return [f for f in fontes if _normalizar_comparacao(f["url"]) in alvo]
 
 
 def _fontes_de(saida, texto):

@@ -168,8 +168,8 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
                 fato = d.pesquisar(dia, hist, list(rejeitados))
                 break
             except TemaRepetido as erro:
-                # O modelo às vezes ignora a lista de temas usados: tenta de novo citando o título recusado.
-                rejeitados.append(erro.titulo)
+                # Todos os candidatos já usados: tenta de novo citando cada título recusado.
+                rejeitados.extend(t for t in erro.titulos if t not in rejeitados)
                 if tentativa_pesquisa >= TENTATIVAS_PESQUISA:
                     raise
             except (ErroPesquisa, ErroGemini, ErroOpenAI):

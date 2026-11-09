@@ -111,5 +111,53 @@ class PesquisaComHistoricoTest(unittest.TestCase):
         self.assertIn("UNIVAC prevê a eleição americana", prompts[0])
 
 
+# Dados reais de 2026-11-09: o slot 2 trouxe o Firefox 1.0 (já publicado às 9h) nas 3 tentativas.
+HIST_FIREFOX = {
+    "2026-11-09#1": {"titulo": "O Lançamento do Firefox 1.0", "titulo_pesquisa": "Firefox 1.0 é lançado",
+                     "data_evento": "2004-11-09", "status": "publicado"},
+}
+FIREFOX = {"titulo": "Firefox 1.0 lançado", "data": "2004-11-09", "fato": "Em 9 de novembro de 2004…",
+           "numeros": ["2004"], "fontes": ["https://a.org/1"]}
+XBOX = {"titulo": "Halo 2 chega às lojas", "data": "1999-11-09", "fato": "Em 9 de novembro de 1999…",
+        "numeros": ["1999"], "fontes": ["https://b.com/2", "https://c.net/3"]}
+FONTES_CANDIDATOS = [{"dominio": "a.org", "url": "https://a.org/1"}, {"dominio": "b.com", "url": "https://b.com/2"},
+                     {"dominio": "c.net", "url": "https://www.c.net/3/"}]
+
+
+def buscar_candidatos(resposta, prompts):
+    def buscar(prompt, chave, modelo):
+        prompts.append(prompt)
+        return json.dumps(resposta, ensure_ascii=False), FONTES_CANDIDATOS
+    return buscar
+
+
+class CandidatosTest(unittest.TestCase):
+    def test_prompt_pede_varios_candidatos(self):
+        self.assertIn('"candidatos"', pesquisa.PROMPT)
+
+    def test_pula_o_candidato_repetido_e_usa_o_seguinte(self):
+        prompts = []
+        fato = pesquisa.pesquisar(date(2026, 11, 9), HIST_FIREFOX, "K", "m",
+                                  buscar=buscar_candidatos({"candidatos": [FIREFOX, XBOX]}, prompts))
+        self.assertEqual(fato["titulo"], "Halo 2 chega às lojas")
+        # Só as fontes que o candidato escolhido listou.
+        self.assertEqual([f["dominio"] for f in fato["fontes"]], ["b.com", "c.net"])
+
+    def test_pula_candidato_de_outro_dia_ou_incompleto(self):
+        outro_dia = {**XBOX, "titulo": "Outro", "data": "1999-11-10"}
+        incompleto = {"titulo": "Sem fato", "data": "1998-11-09"}
+        fato = pesquisa.pesquisar(date(2026, 11, 9), HIST_FIREFOX, "K", "m",
+                                  buscar=buscar_candidatos({"candidatos": [outro_dia, incompleto, XBOX]}, []))
+        self.assertEqual(fato["titulo"], "Halo 2 chega às lojas")
+
+    def test_todos_repetidos_levanta_tema_repetido_com_todos_os_titulos(self):
+        outro_firefox = {**FIREFOX, "titulo": "Mozilla lança o Firefox"}
+        with self.assertRaises(pesquisa.TemaRepetido) as ctx:
+            pesquisa.pesquisar(date(2026, 11, 9), HIST_FIREFOX, "K", "m",
+                               buscar=buscar_candidatos({"candidatos": [FIREFOX, outro_firefox]}, []))
+        self.assertEqual(ctx.exception.titulos, ["Firefox 1.0 lançado", "Mozilla lança o Firefox"])
+        self.assertEqual(ctx.exception.titulo, "Firefox 1.0 lançado")
+
+
 if __name__ == "__main__":
     unittest.main()

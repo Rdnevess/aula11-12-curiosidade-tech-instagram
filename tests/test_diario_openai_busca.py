@@ -82,6 +82,19 @@ class BuscarTest(unittest.TestCase):
             {"dominio": "en.wikipedia.org", "url": "https://en.wikipedia.org/wiki/Sputnik_2"},
         ])
 
+    def test_fontes_listadas_dentro_dos_candidatos_contam(self):
+        resposta = {"output": [
+            {"type": "web_search_call", "action": {"sources": [
+                {"type": "url", "url": "https://www.nasa.gov/a"},
+                {"type": "url", "url": "https://b.com/x"},
+            ]}},
+            {"type": "message", "content": [{"type": "output_text", "text": json.dumps({
+                "candidatos": [{"fontes": ["https://www.nasa.gov/a"]}, {"fontes": ["https://b.com/x"]}],
+            })}]},
+        ]}
+        texto, fontes = openai_busca.buscar("p", "K", "m", post=post_falso(resposta))
+        self.assertEqual([f["dominio"] for f in fontes], ["nasa.gov", "b.com"])
+
     def test_url_listada_mas_nao_consultada_e_ignorada(self):
         resposta = {"output": [
             {"type": "web_search_call", "action": {"sources": [
