@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
 class UrlLocalTest(unittest.TestCase):
     def test_troca_o_dominio_publico_pelo_n8n_local(self):
-        url = "https://visiting-sagging-magnify.ngrok-free.dev/form-waiting/56?x=1"
+        url = "https://exemplo.ngrok-free.dev/form-waiting/56?x=1"
         self.assertEqual(publicar_mod._local(url), publicar_mod.BASE_URL.rstrip("/") + "/form-waiting/56?x=1")
 
     def test_url_ja_local_fica_igual(self):

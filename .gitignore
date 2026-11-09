@@ -19,3 +19,13 @@ motion-3d-design/
 # Curiosidade diária: pastas de trabalho, histórico e offset do Telegram
 reels/diario-*/
 /diario/
+
+# Material de apoio da Aula 12, rascunhos e imagens do perfil (não versionados)
+Aula12-continuacao-insta/
+Captura de tela *.png
+Curiosidades.txt
+diario-fixes-report.md
+posts.md
+posts/resultados.json
+perfil/
+capas/
