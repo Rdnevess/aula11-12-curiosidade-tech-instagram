@@ -167,7 +167,7 @@ class ExportarTest(unittest.TestCase):
 
     def test_segredos_do_env(self):
         env = {"N8N_API_KEY": "k" * 30, "TELEGRAM_BOT_TOKEN": BOT, "META_APP_SECRET": "",
-               "INSTAGRAM_CONTA_ID": "17841475108548218", "TELEGRAM_CHAT_ID": "123"}
+               "INSTAGRAM_CONTA_ID": "17840000000000000", "TELEGRAM_CHAT_ID": "123"}
         self.assertEqual(sorted(exportar.segredos(env)), sorted(["k" * 30, BOT]))
 
 
