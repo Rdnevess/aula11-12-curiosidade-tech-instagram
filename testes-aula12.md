@@ -1,6 +1,6 @@
 # Testes — Aula 12 (Respondendo comentários e mensagens)
 
-Evidência dos testes da Aula 12, complementar à seção "Testes" do [`README.md`](README.md). Nenhum teste publicou no Instagram nem chamou a Meta: os testes locais usam os eventos de exemplo de `Aula12-continuacao-insta/volume-12/eventos/` com ids fictícios de comentário e destinatário; a única chamada real da Meta foi a verificação do webhook (seção 3).
+Evidência dos testes da Aula 12, complementar à seção "Testes" do [`README.md`](README.md). Nenhum teste publicou no Instagram nem chamou a Meta: os testes locais usam os eventos de exemplo de `Aula12-continuacao-insta/volume-12/eventos/` com ids fictícios de comentário e destinatário; as chamadas reais da Meta foram a verificação do webhook (seção 4) e os eventos de teste do painel (seção 5).
 
 ## 1. Testes unitários
 
@@ -40,4 +40,12 @@ A Meta chamou `GET /webhook/instagram` com `hub.mode=subscribe`, o `hub.verify_t
 
 ## 5. Teste do painel da Meta
 
-A preencher após o clique em Teste no painel.
+Eventos de exemplo disparados pelo botão **Teste** do painel do app (Webhooks), em 08/11/2026, chegando pelo túnel do ngrok com a assinatura `X-Hub-Signature-256` da própria Meta.
+
+| Execução | Campo | Nós percorridos | Resultado |
+| --- | --- | --- | --- |
+| **69**, **70** | `comments`, `messages` | Evento do Instagram → **Conferir assinatura** | Recusados: o `META_APP_SECRET` gravado era a chave secreta do app da Meta (*Configurações → Básico*), mas no login do Instagram a Meta assina com a **chave secreta do app do Instagram**. Confirmado recalculando o HMAC sobre a requisição bruta guardada pelo ngrok: não conferia com a chave antiga e conferiu com a nova |
+| **71** | `comments` | Evento do Instagram → Conferir assinatura → Separar eventos → Tipo de evento → Histórico → **Responder?** | Assinatura válida; o evento virou um comentário (`de_usuario: test`, `midia_id: 123123123`). Terminou em "Responder?" sem resposta, como esperado: o post 123123123 do exemplo não é um post do sistema |
+| **72** | `messages` | Evento do Instagram → Conferir assinatura → **Separar eventos** | Assinatura válida; nenhum evento separado. O exemplo do painel vem em `entry[].changes[]` com `field: messages`, enquanto as mensagens reais do Direct chegam em `entry[].messaging[]` (formato tratado pelo nó e testado na seção 2, execuções 43 e 44) |
+
+Correção aplicada: `python -m scripts.aula12.infra --app-secret <chave secreta do app do Instagram>`, que grava o valor no `.env`, regera o `.env.n8n` e reinicia o n8n.

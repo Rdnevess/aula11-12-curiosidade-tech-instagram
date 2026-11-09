@@ -137,7 +137,7 @@ Detalhes completos (ids de execução, nós alcançados, evidência do túnel) e
 
 O app da Meta usado neste laboratório está em **modo de desenvolvimento**. Publicá-lo (torná-lo disponível para qualquer conta, sem precisar estar na lista de testadores) exige um **portfólio empresarial** verificado na Meta — e, dependendo do caso, verificação da empresa — o que está fora do alcance de um projeto de estudante.
 
-Por isso, **a Meta não chegou a entregar eventos reais de comentário ou Direct** de outra conta: o aplicativo confirma a assinatura do webhook (seção 4), mas o modo de desenvolvimento limita quem pode gerar esses eventos. Tudo o que diz respeito ao processamento dos eventos foi validado **localmente** (POSTs com o payload de exemplo da apostila e assinatura calculada com o App Secret real) e pela própria **verificação do webhook pela Meta**, que de fato chamou o sistema e recebeu o desafio de volta com sucesso.
+Por isso, **a Meta não chegou a entregar eventos reais de comentário ou Direct** de outra conta: em modo de desenvolvimento a Meta só envia os eventos de teste disparados pelo painel, mesmo para administradores e testadores do app, e a publicação esbarra na verificação da empresa (exige CNPJ). Os eventos de teste do painel chegaram e passaram pela conferência da assinatura (ver `testes-aula12.md`, seção 5). Tudo o que diz respeito ao processamento dos eventos foi validado **localmente** (POSTs com o payload de exemplo da apostila e assinatura calculada com o App Secret real) e pela própria **verificação do webhook pela Meta**, que de fato chamou o sistema e recebeu o desafio de volta com sucesso.
 
 ### Evidência do teste da Meta
 
@@ -186,7 +186,7 @@ README.md             este arquivo
 | `NGROK_DOMINIO` | domínio fixo do túnel (Aula 12) |
 | `INSTAGRAM_CONTA_ID` | id da conta na Graph API (Aula 12) |
 | `WEBHOOK_VERIFY_TOKEN` | token de verificação do webhook da Meta (gerado por `scripts.aula12.implantar` se faltar) |
-| `META_APP_SECRET` | assinatura HMAC dos eventos do webhook (Aula 12) |
+| `META_APP_SECRET` | assinatura HMAC dos eventos do webhook (Aula 12): é a **chave secreta do app do Instagram** (Instagram → Configuração da API com login do Instagram), não a de Configurações → Básico |
 
 A credencial do Groq (`openai/gpt-oss-120b`, usada no agente do Direct) e a do Instagram (`Instagram TEP`) são cadastradas direto na interface do n8n, não no `.env` — nenhum token de acesso a essas contas passa pelo repositório.
 
