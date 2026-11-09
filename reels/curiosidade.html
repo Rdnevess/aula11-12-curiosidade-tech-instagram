@@ -272,8 +272,17 @@ const BLOCOS = {
     },
     // max-width:330px (painel 370px − ~20px de cada lado) + overflow-wrap:anywhere no HTML já
     // garantem que nada escapa do painel; o fit() aqui só evita 3+ linhas (shrink p/ ~2 linhas).
-    // Uma palavra só ("Eletromecânico") precisa caber inteira na largura do painel (330px), sem partir no meio.
-    fit(d, i) { [d.esquerda, d.direita].forEach((v, k) => fit($(`#b${i}cp${k}`), /\s/.test(String(v ?? '').trim()) ? 640 : 330, 64, 30)) },
+    // Nenhuma palavra ("Eletromecânico", "Numéricos") pode partir no meio: a mais longa cabe inteira nos 330px
+    // do painel; o texto todo cabe em ~2 linhas (640px).
+    fit(d, i) {
+      [d.esquerda, d.direita].forEach((v, k) => {
+        const el = $(`#b${i}cp${k}`), texto = el.textContent
+        el.textContent = String(v ?? '').split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), '')
+        const porPalavra = fit(el, 330, 64, 30)
+        el.textContent = texto
+        el.style.fontSize = `${Math.min(porPalavra, fit(el, 640, 64, 30))}px`
+      })
+    },
     anim: () => null,
   },
 }

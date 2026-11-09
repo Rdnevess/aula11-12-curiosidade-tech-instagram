@@ -64,6 +64,13 @@ class ValidarTest(unittest.TestCase):
                                     DIA, FATO["fato"])
         self.assertTrue(any("mínimo" in p for p in problemas))
 
+    def test_ano_nao_vai_no_bloco_numero(self):
+        # Ensaio de 09/11/2026: "Ano 1983" virou um contador ("Ano 1.943" no meio, "1.983" no fim).
+        ano_do_fato = com(lambda r: r["trechos"][3]["dados"].update(valor=1957, prefixo="", sufixo="", legenda="lançamento"))
+        com_prefixo = com(lambda r: r["trechos"][3]["dados"].update(prefixo="Ano"))
+        for errado in (ano_do_fato, com_prefixo):
+            self.assertTrue(any("ano" in p for p in roteiro.validar(errado, DIA, FATO["fato"])))
+
     def test_quantidade_de_trechos(self):
         self.assertTrue(roteiro.validar(com(lambda r: r["trechos"].__delitem__(slice(1, 4))), DIA, FATO["fato"]))
 

@@ -37,7 +37,8 @@ Regras:
 - Catálogo (campo: limite):
   gancho: icone (um de {icones}), carimbo (≤ 12 caracteres, MAIÚSCULAS)
   data: texto ("DD/MM/AAAA" da data do fato)
-  numero: valor (número), prefixo (≤ 4, pode ser ""), sufixo (≤ 6, pode ser ""), legenda (≤ 28)
+  numero: valor (número), prefixo (≤ 4, pode ser ""), sufixo (≤ 6, pode ser ""), legenda (≤ 28) — uma QUANTIDADE
+    (válvulas, usuários, dinheiro), nunca um ano: para anos use data ou linha-do-tempo
   fato: texto (≤ 60)
   linha-do-tempo: de (ano), ate (ano), rotulo (≤ 24)
   comparacao: esquerda (≤ 14), direita (≤ 14), rotulos (lista com 2 textos ≤ 12)
@@ -105,6 +106,12 @@ def _validar_dados(i, bloco, dados, problemas):
             problemas.append(f"trecho {i + 1}: {campo} passa de {regra} caracteres")
 
 
+def _ano_no_numero(dados, dia_evento):
+    """O contador anima de 0 até o valor com ponto de milhar: um ano viraria "1.983"."""
+    rotulos = f"{dados.get('prefixo', '')} {dados.get('sufixo', '')}".lower().split()
+    return dados.get("valor") == dia_evento.year or "ano" in rotulos
+
+
 def validar(roteiro, dia_evento, fato_texto):
     problemas = []
     trechos = roteiro.get("trechos")
@@ -137,6 +144,8 @@ def validar(roteiro, dia_evento, fato_texto):
             problemas.append(f"trecho {i + 1}: bloco fora do catálogo: {bloco}")
         else:
             _validar_dados(i, bloco, dados or {}, problemas)
+        if bloco == "numero" and isinstance(dados, dict) and _ano_no_numero(dados, dia_evento):
+            problemas.append(f"trecho {i + 1}: o bloco numero é para quantidades; um ano vai em data ou linha-do-tempo")
         if i and bloco == blocos[i - 1]:
             problemas.append(f"trecho {i + 1}: mesmo bloco do trecho anterior")
         primeira = _palavras(fala)[:1]
