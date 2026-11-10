@@ -1,4 +1,8 @@
-"""Trava de confiança: decide se o Reel do dia pode ser publicado sem aprovação."""
+"""Trava de confiança: decide se o Reel do dia pode ser publicado sem aprovação.
+
+Desde 10/11/2026 (pedido do usuário) só os motivos graves seguram o post para aprovação; os outros
+viram "suspeitas": o post sai e o aviso no Telegram diz quais são.
+"""
 from scripts.diario.gemini import dominios
 
 
@@ -31,6 +35,14 @@ def dominio_base(dominio):
 
 def _e_wikipedia(dominio):
     return dominio == "wikipedia.org" or dominio.endswith(".wikipedia.org")
+
+
+# Vídeo com defeito técnico (o Instagram pode recusar) e tema repetido continuam esperando aprovação.
+GRAVES = ("vídeo:", "tema já publicado")
+
+
+def graves(motivos):
+    return [m for m in motivos if m.startswith(GRAVES)]
 
 
 def decidir(fato, confirmacao, tentativa_roteiro, problemas_video, repetido):

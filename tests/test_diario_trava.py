@@ -86,5 +86,14 @@ class DecidirTest(unittest.TestCase):
         self.assertTrue(trava.decidir({"fontes": fontes}, conf, 1, [], False)[0])
 
 
+class GravesTest(unittest.TestCase):
+    def test_so_video_e_tema_repetido_seguram(self):
+        from scripts.diario import trava
+        self.assertEqual(trava.graves(["a checagem cruzada não confirmou a data", "números não confirmados: 10",
+                                       "pesquisa com poucas fontes independentes (domínios: si.edu)"]), [])
+        self.assertEqual(trava.graves(["vídeo: sem +faststart", "tema já publicado antes (x)", "números não confirmados: 1"]),
+                         ["vídeo: sem +faststart", "tema já publicado antes (x)"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,9 +13,10 @@ FATO = {"titulo": "Sputnik 2", "data": "1957-11-03", "fato": "…", "numeros": [
 ROTEIRO = {"titulo": "Sputnik 2", "trechos": [{"fala": "Oi."}], "legenda_post": "legenda"}
 CONF_OK = {"data_confirmada": True, "numeros": [], "fontes": FATO["fontes"]}
 DIA = date(2026, 11, 3)
+GRAVE = ["duração 55.0 s acima de 50.0 s"]  # defeito técnico do vídeo: segura para aprovação
 
 
-def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA):
+def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA, problemas_video=()):
     estado = {"hist": historico if historico is not None else {}, "textos": [], "videos": [], "publicados": [],
               "respostas": [], "offset": 0, "botoes": []}
 
@@ -34,7 +35,7 @@ def deps(conf=CONF_OK, historico=None, cliques=(), publicar_erro=None, hoje=DIA)
         prechecar=lambda: None,
         pesquisar=lambda dia, hist, rejeitados: dict(FATO),
         gerar_roteiro=lambda fato: (ROTEIRO, 1),
-        montar=lambda pasta, roteiro: (Path("out.mp4"), []),
+        montar=lambda pasta, roteiro: (Path("out.mp4"), list(problemas_video)),
         confirmar=lambda fato, numeros: conf,
         publicar=publicar,
         avisar_texto=lambda t: estado["textos"].append(t),
@@ -65,11 +66,29 @@ class RodarTest(unittest.TestCase):
         self.assertIn("✅", e["textos"][-1])
 
     def test_segura_e_manda_video(self):
-        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        d, e = deps(problemas_video=GRAVE)
         self.assertEqual(fluxo.rodar(DIA, d=d), "pendente")
         self.assertEqual(e["publicados"], [])
         self.assertEqual(e["videos"], [(Path("out.mp4"), "2026-11-03#1")])
         self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "pendente")
+
+    def test_suspeitas_leves_publicam_e_avisam_os_motivos(self):
+        # Pedido do usuário (10/11/2026): sem esperar aprovação; o aviso diz por que o post é suspeito.
+        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        self.assertEqual(fluxo.rodar(DIA, d=d), "publicado")
+        self.assertEqual(e["publicados"], [(Path("out.mp4"), "legenda")])
+        self.assertEqual(e["videos"], [])
+        registro = e["hist"]["2026-11-03#1"]
+        self.assertEqual(registro["status"], "publicado")
+        self.assertEqual(registro["suspeitas"], ["a checagem cruzada não confirmou a data"])
+        self.assertIn("suspeitas", e["textos"][-1])
+        self.assertIn("a checagem cruzada não confirmou a data", e["textos"][-1])
+
+    def test_sem_suspeitas_aviso_normal(self):
+        d, e = deps()
+        fluxo.rodar(DIA, d=d)
+        self.assertNotIn("suspeitas", e["textos"][-1])
+        self.assertEqual(e["hist"]["2026-11-03#1"].get("suspeitas"), [])
 
     def test_idempotente(self):
         d, e = deps(historico={"2026-11-03#1": {"titulo": "x", "status": "publicado"}})
@@ -148,7 +167,7 @@ class RodarTest(unittest.TestCase):
         self.assertTrue(any("⚠️" in t for t in e["textos"]))
 
     def test_pendente_falha_no_aviso_reporta_etapa_aviso_no_telegram(self):
-        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        d, e = deps(problemas_video=GRAVE)
 
         def avisar_video_quebrado(mp4, legenda, dia_iso):
             raise RuntimeError("telegram fora")
@@ -228,7 +247,7 @@ class RodarTest(unittest.TestCase):
         self.assertEqual(registro["data_evento"], "1957-11-03")
 
     def test_pendente_tambem_guarda_titulo_da_pesquisa_e_data(self):
-        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        d, e = deps(problemas_video=GRAVE)
         fluxo.rodar(DIA, d=d)
         self.assertEqual(e["hist"]["2026-11-03#1"]["data_evento"], "1957-11-03")
         self.assertEqual(e["hist"]["2026-11-03#1"]["titulo_pesquisa"], "Sputnik 2")
@@ -249,12 +268,12 @@ class RodarTest(unittest.TestCase):
 
     def test_rodar_nao_apaga_o_que_verificar_gravou_durante_a_montagem(self):
         hist = {"2026-11-02#1": {"titulo": "Ontem", "status": "pendente", "video": "v.mp4", "legenda_post": "l"}}
-        d, e = deps(conf={**CONF_OK, "data_confirmada": False}, historico=hist)
+        d, e = deps(problemas_video=GRAVE, historico=hist)
 
         def montar_demorado(pasta, roteiro):
             # verificar roda em paralelo e descarta o pendente de ontem
             d.historico_atualizar("2026-11-02#1", {"status": "descartado"})
-            return Path("out.mp4"), []
+            return Path("out.mp4"), GRAVE
 
         d.montar = montar_demorado
         self.assertEqual(fluxo.rodar(DIA, d=d), "pendente")
@@ -264,9 +283,9 @@ class RodarTest(unittest.TestCase):
 
 class SlotsRodarTest(unittest.TestCase):
     def test_slot_2_usa_chave_e_pasta_proprias(self):
-        d, e = deps(conf={**CONF_OK, "data_confirmada": False})
+        d, e = deps(problemas_video=GRAVE)
         pastas = []
-        d.montar = lambda pasta, roteiro: (pastas.append(pasta), (Path("out.mp4"), []))[1]
+        d.montar = lambda pasta, roteiro: (pastas.append(pasta), (Path("out.mp4"), GRAVE))[1]
         self.assertEqual(fluxo.rodar(DIA, slot=2, d=d), "pendente")
         self.assertEqual(e["hist"]["2026-11-03#2"]["status"], "pendente")
         self.assertNotIn("2026-11-03#1", e["hist"])
@@ -314,6 +333,33 @@ class SlotsRodarTest(unittest.TestCase):
         self.assertEqual(pastas[0].name, "diario-2026-11-03-2-ensaio")
         self.assertIn("11h", e["textos"][-1])
         self.assertEqual(e["hist"], {})
+
+
+class PublicarPendenteTest(unittest.TestCase):
+    def test_publica_o_pendente_de_hoje(self):
+        hist = {"2026-11-03#1": {"titulo": "Sputnik 2", "status": "pendente", "video": "out.mp4", "legenda_post": "leg"}}
+        d, e = deps(historico=hist)
+        self.assertEqual(fluxo.publicar_pendente("2026-11-03#1", d=d), "publicado")
+        self.assertEqual(e["publicados"], [(Path("out.mp4"), "leg")])
+        self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "publicado")
+
+    def test_nao_publica_o_que_nao_esta_pendente(self):
+        d, e = deps(historico={"2026-11-03#1": {"titulo": "S", "status": "publicado", "video": "v", "legenda_post": "l"}})
+        self.assertEqual(fluxo.publicar_pendente("2026-11-03#1", d=d), "nada a fazer: status publicado")
+        self.assertEqual(e["publicados"], [])
+
+    def test_nao_publica_pendente_de_outro_dia(self):
+        hist = {"2026-11-02#1": {"titulo": "Ontem", "status": "pendente", "video": "v", "legenda_post": "l"}}
+        d, e = deps(historico=hist)
+        self.assertIn("outro dia", fluxo.publicar_pendente("2026-11-02#1", d=d))
+        self.assertEqual(e["publicados"], [])
+
+    def test_falha_na_publicacao_propaga(self):
+        hist = {"2026-11-03#1": {"titulo": "S", "status": "pendente", "video": "v", "legenda_post": "l"}}
+        d, e = deps(historico=hist, publicar_erro=RuntimeError("Invalid OAuth"))
+        with self.assertRaises(RuntimeError):
+            fluxo.publicar_pendente("2026-11-03#1", d=d)
+        self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "erro_publicacao")
 
 
 class VerificarTest(unittest.TestCase):

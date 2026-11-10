@@ -3,6 +3,7 @@
 Uso:
   python -m scripts.diario rodar [--data AAAA-MM-DD] [--slot 1|2] [--sem-publicar]
   python -m scripts.diario verificar
+  python -m scripts.diario publicar AAAA-MM-DD#slot     (publica um post pendente, sem o botão)
   python -m scripts.diario telegram-id
   python -m scripts.diario agendar [--confirmar]
 """
@@ -82,6 +83,10 @@ def main(argumentos):
         if slot not in {str(s) for s in config.HORARIOS}:
             sys.exit(__doc__)
         print(fluxo.rodar(dia, slot=int(slot), sem_publicar="--sem-publicar" in resto))
+    elif comando == "publicar":
+        if not resto:
+            sys.exit(__doc__)
+        print(fluxo.publicar_pendente(resto[0]))
     elif comando == "verificar":
         print(f"{fluxo.verificar()} clique(s)")
     elif comando == "telegram-id":

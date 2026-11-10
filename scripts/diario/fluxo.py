@@ -189,18 +189,22 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
         repetido = (historico.ja_usado(hist, fato["titulo"], fato.get("data"))
                     or historico.ja_usado(hist, roteiro["titulo"]))
         ok, motivos = trava.decidir(fato, confirmacao, tentativa, problemas, repetido)
+        segura = trava.graves(motivos)
         if sem_publicar:
-            d.avisar_texto(f"🧪 ensaio {chave}{_rotulo(chave)}: {roteiro['titulo']} — "
-                           f"{'publicaria sozinho' if ok else 'seguraria: ' + '; '.join(motivos)}")
+            resumo = ("seguraria: " + "; ".join(segura) if segura
+                      else "publicaria com suspeitas: " + "; ".join(motivos) if motivos else "publicaria sozinho")
+            d.avisar_texto(f"🧪 ensaio {chave}{_rotulo(chave)}: {roteiro['titulo']} — {resumo}")
             return "ensaio"
         base = {"titulo": roteiro["titulo"], "titulo_pesquisa": fato["titulo"], "data_evento": fato.get("data"),
                 "fato": fato.get("fato"), "fontes": fato.get("fontes", []),
                 "falas": [trecho["fala"] for trecho in roteiro.get("trechos", [])], "video": str(mp4),
                 "legenda_post": roteiro["legenda_post"], "pasta": str(pasta)}
-        if ok:
+        if not segura:
+            # Suspeitas leves não seguram mais o post (pedido do usuário em 10/11/2026): o aviso diz quais são.
             etapa = "publicação"
-            _, erro_pub = _publicar(d, chave, roteiro["titulo"], mp4, roteiro["legenda_post"], base,
-                                    f"\nFontes: {_fontes(fato)}")
+            aviso = f"\n⚠️ Publicado sem aprovação, com suspeitas: {'; '.join(motivos)}" if motivos else ""
+            _, erro_pub = _publicar(d, chave, roteiro["titulo"], mp4, roteiro["legenda_post"],
+                                    {**base, "suspeitas": motivos}, f"\nFontes: {_fontes(fato)}{aviso}")
             if erro_pub:
                 avisado = True
                 raise erro_pub
@@ -214,6 +218,21 @@ def rodar(dia, slot=1, sem_publicar=False, d=None):
         if not avisado:
             d.avisar_texto(mensagem_erro(etapa, erro))
         raise
+
+
+def publicar_pendente(chave, d=None):
+    """Publica um post pendente sem o botão do Telegram (mesmas regras do clique em Publicar)."""
+    d = d or Dependencias.reais()
+    registro = d.historico_carregar().get(chave)
+    if not registro or registro.get("status") != "pendente":
+        return f"nada a fazer: status {registro.get('status') if registro else 'inexistente'}"
+    dia, _ = historico.separar(chave)
+    if dia != d.hoje():
+        return f"não publicado: o vídeo é de outro dia ({chave})"
+    _, erro = _publicar(d, chave, registro["titulo"], Path(registro["video"]), registro["legenda_post"])
+    if erro:
+        raise erro
+    return "publicado"
 
 
 def _tratar_clique(d, clique):
