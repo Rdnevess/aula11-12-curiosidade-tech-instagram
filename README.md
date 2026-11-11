@@ -61,7 +61,7 @@ Extensão que, sem intervenção, pesquisa uma curiosidade de tecnologia ocorrid
 - **Roteiro:** Gemini (`gemini-3.5-flash`, sem busca), roteiro + cena no esquema validado (4 a 6 trechos, catálogo fixo de blocos visuais).
 - **Voz e vídeo:** voz Puck (Gemini TTS); o template `reels/curiosidade.html` ganhou a cena `auto`, que posiciona o bloco de cada trecho no tempo certo, e um cartão de capa (para a grade do perfil) no primeiro quadro.
 - **Trava de confiança:** publica sozinho só se as fontes tiverem ≥ 2 domínios distintos (nem todos Wikipedia), uma checagem cruzada confirmar data e números, o roteiro e o vídeo forem válidos, e o tema não se repetir no histórico. Qualquer falha manda o vídeo ao Telegram do usuário com botões **Publicar**/**Descartar**.
-- **Agendamento:** dois posts por dia, **09:00 e 11:00** (horário de Cuiabá), com uma nova tentativa automática **40 minutos depois** (09:40/11:40) se o horário original falhar ou não for resolvido; `diario verificar` roda **a cada 10 minutos** para ler os cliques do Telegram. As tarefas são criadas pelo Agendador de Tarefas do Windows via `python -m scripts.diario agendar --confirmar`.
+- **Agendamento:** dois posts por dia, **11:00 e 18:00** (horário de Cuiabá; 12h e 19h em Brasília), com uma nova tentativa automática **40 minutos depois** (11:40/18:40) se o horário original falhar ou não for resolvido; `diario verificar` roda **a cada 10 minutos** para ler os cliques do Telegram. As tarefas são criadas pelo Agendador de Tarefas do Windows via `python -m scripts.diario agendar --confirmar`.
 - O histórico de temas, status e permalinks fica em `diario/historico.json` (fora do git).
 
 ## 4. Aula 12 — Respondendo comentários e mensagens

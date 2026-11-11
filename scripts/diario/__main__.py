@@ -1,4 +1,4 @@
-"""Curiosidade de tecnologia diária (dois posts por dia: slot 1 às 09:00, slot 2 às 11:00).
+"""Curiosidade de tecnologia diária (dois posts por dia: slot 1 às 11:00, slot 2 às 18:00).
 
 Uso:
   python -m scripts.diario rodar [--data AAAA-MM-DD] [--slot 1|2] [--sem-publicar]

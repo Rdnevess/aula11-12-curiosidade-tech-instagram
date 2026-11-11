@@ -323,7 +323,7 @@ class SlotsRodarTest(unittest.TestCase):
         d, e = deps()
         fluxo.rodar(DIA, slot=2, d=d)
         self.assertTrue(e["textos"][-1].startswith("✅"))
-        self.assertIn("11h", e["textos"][-1])
+        self.assertIn("18h", e["textos"][-1])
 
     def test_ensaio_do_slot_2_usa_pasta_propria(self):
         d, e = deps()
@@ -331,7 +331,7 @@ class SlotsRodarTest(unittest.TestCase):
         d.montar = lambda pasta, roteiro: (pastas.append(pasta), (Path("out.mp4"), []))[1]
         self.assertEqual(fluxo.rodar(DIA, slot=2, sem_publicar=True, d=d), "ensaio")
         self.assertEqual(pastas[0].name, "diario-2026-11-03-2-ensaio")
-        self.assertIn("11h", e["textos"][-1])
+        self.assertIn("18h", e["textos"][-1])
         self.assertEqual(e["hist"], {})
 
 
@@ -481,7 +481,7 @@ class VerificarTest(unittest.TestCase):
         self.assertEqual(e["publicados"], [(Path("t.mp4"), "l2")])
         self.assertEqual(e["hist"]["2026-11-03#2"]["status"], "publicado")
         self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "pendente")
-        self.assertIn("11h", e["textos"][-1])
+        self.assertIn("18h", e["textos"][-1])
 
     def test_descartar_slot_1_nao_mexe_no_slot_2(self):
         hist = {"2026-11-03#1": {"titulo": "Manhã", "status": "pendente", "video": "m.mp4", "legenda_post": "l1"},
@@ -490,7 +490,7 @@ class VerificarTest(unittest.TestCase):
         fluxo.verificar(d)
         self.assertEqual(e["hist"]["2026-11-03#1"]["status"], "descartado")
         self.assertEqual(e["hist"]["2026-11-03#2"]["status"], "pendente")
-        self.assertIn("09h", e["textos"][-1])
+        self.assertIn("11h", e["textos"][-1])
 
     def test_expira_pela_data_da_chave(self):
         hist = {"2026-11-02#2": {"titulo": "Ontem", "status": "pendente", "video": "v.mp4", "legenda_post": "l"},

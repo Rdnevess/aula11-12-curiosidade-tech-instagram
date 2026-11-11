@@ -8,7 +8,7 @@ PASTA_REELS = RAIZ / "reels"
 SKILL = RAIZ / "reels-video" / "scripts"
 CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe"
 # Dois posts por dia (horário local, America/Cuiaba): slot -> hora da tarefa agendada.
-HORARIOS = {1: "09:00", 2: "11:00"}
+HORARIOS = {1: "11:00", 2: "18:00"}
 MODELO = "gemini-3.5-flash"
 MODELO_RESERVA = "gemini-3.5-flash-lite"
 MODELO_PESQUISA = "gpt-5.4-mini"

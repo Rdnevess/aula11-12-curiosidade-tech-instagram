@@ -21,10 +21,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.pasta_do_dia(date(2026, 11, 3), 2, ensaio=True).name, "diario-2026-11-03-2-ensaio")
 
     def test_horarios_dos_slots(self):
-        self.assertEqual(config.HORARIOS, {1: "09:00", 2: "11:00"})
+        self.assertEqual(config.HORARIOS, {1: "11:00", 2: "18:00"})
         self.assertFalse(hasattr(config, "HORARIO"))
-        self.assertEqual(config.hora_curta(1), "09h")
-        self.assertEqual(config.hora_curta(2), "11h")
+        self.assertEqual(config.hora_curta(1), "11h")
+        self.assertEqual(config.hora_curta(2), "18h")
 
 
 class GeminiTest(unittest.TestCase):
