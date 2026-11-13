@@ -73,8 +73,9 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
     def test_tres_tarefas_com_horarios_e_tr_escapado(self):
         linhas = self._saida()
         criar = [l for l in linhas if l.startswith("schtasks /Create")]
-        self.assertEqual(len(criar), 5)
-        esperado = {"rodar-1": "/SC DAILY /ST 11:00", "rodar-2": "/SC DAILY /ST 18:00", "verificar": "/SC MINUTE /MO 10"}
+        self.assertEqual(len(criar), 6)
+        esperado = {"rodar-1": "/SC DAILY /ST 11:00", "rodar-2": "/SC DAILY /ST 18:00", "verificar": "/SC MINUTE /MO 10",
+                    "recuperar": "/SC MINUTE /MO 10"}
         for nome, agenda in esperado.items():
             caminho = str(self.pasta / f"{nome}.cmd")
             linha = next(l for l in criar if f'/TN "CuriosidadeTech\\{nome}"' in l)
@@ -84,6 +85,16 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
         self.assertIn(b"rodar --slot 1", (self.pasta / "rodar-1.cmd").read_bytes())
         self.assertIn(b"rodar --slot 2", (self.pasta / "rodar-2.cmd").read_bytes())
         self.assertIn(b"scripts.diario verificar >>", (self.pasta / "verificar.cmd").read_bytes())
+        self.assertIn(b"scripts.diario recuperar >>", (self.pasta / "recuperar.cmd").read_bytes())
+
+    def test_libera_as_tarefas_na_bateria(self):
+        linhas = self._saida()
+        bateria = [l for l in linhas if "AllowStartIfOnBatteries" in l]
+        self.assertEqual(len(bateria), 1)
+        self.assertIn("-DontStopIfGoingOnBatteries", bateria[0])
+        self.assertIn("-TaskPath '\\CuriosidadeTech\\'", bateria[0])
+        # StartWhenAvailable rodaria o slot 2 de ontem hoje cedo: quem recupera horário perdido é o recuperar.
+        self.assertNotIn("StartWhenAvailable", bateria[0])
 
     def test_nova_tentativa_40_min_depois_com_o_mesmo_cmd(self):
         linhas = self._saida()
@@ -100,16 +111,43 @@ class AgendarTest(PastaTemporariaMixin, unittest.TestCase):
         saida = io.StringIO()
         with contextlib.redirect_stdout(saida), mock.patch.object(cli.subprocess, "run") as run:
             cli.agendar(True)
-        impressos = [l for l in saida.getvalue().splitlines() if l.startswith("schtasks")]
+        impressos = [l for l in saida.getvalue().splitlines() if l.startswith(("schtasks", "powershell"))]
         comandos = [c.args[0] for c in run.call_args_list]
         self.assertEqual(comandos, impressos)
-        self.assertEqual(len(comandos), 6)
+        self.assertEqual(len(comandos), 8)
         for c in run.call_args_list:
             if "/Create" in c.args[0]:
                 self.assertTrue(c.kwargs.get("check"))
                 self.assertIn('/TR "\\"', c.args[0])
-            else:
+            elif "/Delete" in c.args[0]:
                 self.assertFalse(c.kwargs.get("check", False))
+            else:  # ajuste de bateria: falha alto
+                self.assertTrue(c.kwargs.get("check"))
+
+
+class TravaExecucaoTest(PastaTemporariaMixin, unittest.TestCase):
+    def test_segunda_execucao_ao_mesmo_tempo_sai_como_ocupado(self):
+        with cli.trava_execucao() as livre:
+            self.assertTrue(livre)
+            with cli.trava_execucao() as segunda:
+                self.assertFalse(segunda)
+        with cli.trava_execucao() as depois:
+            self.assertTrue(depois)
+
+    def test_rodar_e_recuperar_respeitam_a_trava(self):
+        for argumentos, funcao in ((["rodar", "--slot", "1"], "rodar"), (["recuperar"], "recuperar")):
+            saida = io.StringIO()
+            with cli.trava_execucao(), mock.patch.object(cli.fluxo, funcao) as chamada,                     contextlib.redirect_stdout(saida):
+                cli.main(argumentos)
+            chamada.assert_not_called()
+            self.assertIn("ocupado", saida.getvalue())
+
+    def test_recuperar_chama_o_fluxo(self):
+        saida = io.StringIO()
+        with mock.patch.object(cli.fluxo, "recuperar", return_value="nada a recuperar") as recuperar,                 contextlib.redirect_stdout(saida):
+            cli.main(["recuperar"])
+        recuperar.assert_called_once_with()
+        self.assertIn("nada a recuperar", saida.getvalue())
 
 
 if __name__ == "__main__":

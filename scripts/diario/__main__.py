@@ -3,10 +3,12 @@
 Uso:
   python -m scripts.diario rodar [--data AAAA-MM-DD] [--slot 1|2] [--sem-publicar]
   python -m scripts.diario verificar
+  python -m scripts.diario recuperar                  (roda um slot de hoje cujo horário foi perdido)
   python -m scripts.diario publicar AAAA-MM-DD#slot     (publica um post pendente, sem o botão)
   python -m scripts.diario telegram-id
   python -m scripts.diario agendar [--confirmar]
 """
+import contextlib
 import subprocess
 import sys
 from datetime import date
@@ -15,6 +17,35 @@ from scripts.diario import config, fluxo, telegram
 
 TAREFA_ANTIGA = "CuriosidadeTech\\rodar"  # de antes dos dois posts por dia
 RETENTATIVA_MIN = 40  # se o post falhar (ex.: Gemini sobrecarregado), tenta de novo 40 min depois
+
+
+# As tarefas não podem parar por falta de tomada (o PC é um notebook). Sem StartWhenAvailable: ele rodaria
+# o slot 2 de ontem hoje cedo; quem cobre horário perdido é o recuperar, que olha só o dia de hoje.
+BATERIA = ("powershell -NoProfile -Command \"$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "
+           "-DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew; "
+           # No PowerShell 5.1, -Settings não combina com a tarefa vinda pelo pipe: nome e caminho explícitos.
+           "Get-ScheduledTask -TaskPath '\\CuriosidadeTech\\' | ForEach-Object { Set-ScheduledTask "
+           "-TaskName $_.TaskName -TaskPath $_.TaskPath -Settings $s | Out-Null }\"")
+
+
+@contextlib.contextmanager
+def trava_execucao():
+    """Garante um rodar/recuperar por vez (rende False se outro já roda). O Windows solta o
+    bloqueio sozinho se o processo morrer, então não sobra trava velha."""
+    import msvcrt
+    config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+    with open(config.PASTA_DADOS / "execucao.lock", "a+b") as arquivo:
+        arquivo.seek(0)
+        try:
+            msvcrt.locking(arquivo.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            arquivo.seek(0)
+            msvcrt.locking(arquivo.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def _mais_minutos(hora, minutos):
@@ -49,6 +80,8 @@ def agendar(confirmar):
         tarefas.append(f'schtasks /Create /F /SC DAILY /ST {_mais_minutos(hora, RETENTATIVA_MIN)} '
                        f'/TN "CuriosidadeTech\\rodar-{slot}-retentativa" {acao}')
     tarefas.append(f'schtasks /Create /F /SC MINUTE /MO 10 /TN "CuriosidadeTech\\verificar" {tr("verificar")}')
+    tarefas.append(f'schtasks /Create /F /SC MINUTE /MO 10 /TN "CuriosidadeTech\\recuperar" {tr("recuperar")}')
+    tarefas.append(BATERIA)
     for tarefa in tarefas:
         print(tarefa)
         if confirmar:
@@ -82,7 +115,12 @@ def main(argumentos):
         slot = _valor(resto, "--slot") or "1"
         if slot not in {str(s) for s in config.HORARIOS}:
             sys.exit(__doc__)
-        print(fluxo.rodar(dia, slot=int(slot), sem_publicar="--sem-publicar" in resto))
+        with trava_execucao() as livre:
+            print(fluxo.rodar(dia, slot=int(slot), sem_publicar="--sem-publicar" in resto) if livre
+                  else "ocupado: outra execução em andamento")
+    elif comando == "recuperar":
+        with trava_execucao() as livre:
+            print(fluxo.recuperar() if livre else "ocupado: outra execução em andamento")
     elif comando == "publicar":
         if not resto:
             sys.exit(__doc__)

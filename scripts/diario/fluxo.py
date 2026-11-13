@@ -1,7 +1,7 @@
 """Fluxo diário: rodar (pesquisa → vídeo → trava → publica ou pede aprovação) e verificar (cliques do Telegram)."""
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Callable
 
@@ -13,6 +13,8 @@ from scripts.diario.pesquisa import ErroPesquisa, TemaRepetido
 # Até 3 tentativas de pesquisa para qualquer recusa (tema repetido, outro dia, JSON quebrado, falha da API).
 # Cada título recusado por tema repetido vai como exclusão explícita no prompt seguinte.
 TENTATIVAS_PESQUISA = 3
+# Horário perdido (PC desligado, Docker parado...): o recuperar tenta cada slot do dia até 3 vezes.
+TENTATIVAS_RECUPERAR = 3
 
 
 @dataclass
@@ -276,3 +278,51 @@ def verificar(d=None):
     finally:
         d.offset_salvar(novo)
     return len(cliques)
+
+
+def _n8n_no_ar():
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://localhost:5678/healthz", timeout=5) as resposta:
+            return resposta.status == 200
+    except OSError:
+        return False
+
+
+def recuperar(agora=None, carregar=historico.carregar, n8n_no_ar=_n8n_no_ar, rodar_slot=None, arquivo=None):
+    """Roda o primeiro slot de hoje cujo horário já passou e que não tem registro nenhum.
+
+    Para quando o PC estava desligado ou o n8n fora do ar no horário. Um slot por chamada (a tarefa
+    roda a cada 10 min), só do dia de hoje (o vídeo diz "hoje") e no máximo TENTATIVAS_RECUPERAR vezes
+    por slot: uma falha de verdade não vira um aviso de erro no Telegram a cada 10 minutos.
+    """
+    agora = agora or datetime.now()
+    rodar_slot = rodar_slot or (lambda dia, slot: rodar(dia, slot=slot))
+    arquivo = Path(arquivo or config.PASTA_DADOS / "recuperar.json")
+    dia = agora.date()
+    hist = carregar()
+    try:
+        tentativas = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        tentativas = {}
+    tentativas = {k: v for k, v in tentativas.items() if historico.separar(k)[0] == dia}
+    for slot, hora in sorted(config.HORARIOS.items()):
+        if agora.time() < time.fromisoformat(hora):
+            continue
+        chave = historico.chave(dia, slot)
+        # Qualquer registro (até descartado/expirado, que foram decisão do usuário) encerra o slot.
+        if chave in hist or historico.ja_resolvido(hist, chave):
+            continue
+        if tentativas.get(chave, 0) >= TENTATIVAS_RECUPERAR:
+            continue
+        if not n8n_no_ar():
+            return "n8n fora do ar; tento de novo depois"
+        tentativas[chave] = tentativas.get(chave, 0) + 1
+        arquivo.parent.mkdir(parents=True, exist_ok=True)
+        arquivo.write_text(json.dumps(tentativas), encoding="utf-8")
+        try:
+            return f"{chave}: {rodar_slot(dia, slot)}"
+        except Exception as erro:
+            # O rodar já avisou o erro no Telegram.
+            return f"{chave}: falhou ({str(erro)[:200]})"
+    return "nada a recuperar"
